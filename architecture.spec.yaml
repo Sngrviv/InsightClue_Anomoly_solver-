@@ -1,0 +1,100 @@
+meta:
+  profile: default
+  theme: tech-blue
+  layout: hierarchical
+  title: "InsightClue Multi-Source Anomaly Ingestion & Multi-Agent Architecture"
+  description: "Hybrid Ingestion (Metrics, NLP Ticket Spikes, Ad-Hoc) and Multi-Agent RCA"
+
+nodes:
+  - id: raw_data
+    label: "FinTech Data Stores\n(Metrics, Gateway Logs, pgvector Tickets)"
+    type: database
+
+  - id: trigger_seam
+    label: "Multi-Source Ingestion Seam\n(Metrics Scan | NLP Ticket Spike | Ad-Hoc)"
+    type: process
+
+  - id: anomaly_event
+    label: "Unified AnomalyEvent\n(CRITICAL / HIGH / ON-DEMAND)"
+    type: document
+
+  - id: supervisor_agent
+    label: "Lead Detective\n(Supervisor & Orchestrator)"
+    type: decision
+
+  - id: sql_agent
+    label: "SQL Analytics Agent\n(Transaction Log Analyst)"
+    type: process
+
+  - id: rag_agent
+    label: "Vector RAG Agent\n(Dispute Ticket Analyst)"
+    type: process
+
+  - id: sql_sandbox
+    label: "Safe Read-Only SQL Sandbox\n(AST & Regex Guardrails)"
+    type: service
+
+  - id: vector_store
+    label: "TicketVectorStore\n(pgvector HNSW Cosine Search)"
+    type: service
+
+  - id: postgres_db
+    label: "PostgreSQL 16 + pgvector\n(Relational & Vector Storage)"
+    type: database
+
+  - id: synthesis_agent
+    label: "RCA Synthesis Agent\n(Confidence Scoring & Evidence)"
+    type: process
+
+  - id: rca_report
+    label: "Executive RCA Report\n(PostgreSQL DB + Markdown)"
+    type: document
+
+edges:
+  - from: raw_data
+    to: trigger_seam
+    label: "Multi-Modal Ingestion"
+
+  - from: trigger_seam
+    to: anomaly_event
+    label: "Standardized Event"
+
+  - from: anomaly_event
+    to: supervisor_agent
+    label: "Trigger Investigation"
+
+  - from: supervisor_agent
+    to: sql_agent
+    label: "Verify Telemetry"
+
+  - from: supervisor_agent
+    to: rag_agent
+    label: "Query Disputes"
+
+  - from: sql_agent
+    to: sql_sandbox
+    label: "Execute SELECT"
+
+  - from: sql_sandbox
+    to: postgres_db
+    label: "Read Gateway Logs"
+
+  - from: rag_agent
+    to: vector_store
+    label: "Semantic Query"
+
+  - from: vector_store
+    to: postgres_db
+    label: "Cosine Distance <=>"
+
+  - from: sql_agent
+    to: synthesis_agent
+    label: "SQL Findings"
+
+  - from: rag_agent
+    to: synthesis_agent
+    label: "Ticket Findings"
+
+  - from: synthesis_agent
+    to: rca_report
+    label: "Persist Report"

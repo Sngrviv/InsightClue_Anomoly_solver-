@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     # Google Gemini API Configuration (Optional / Free Tier)
     GEMINI_API_KEY: str | None = None
     GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
+    GEMINI_LLM_MODEL: str = "gemini-2.5-flash"
 
 
     @computed_field  # type: ignore[misc]
