@@ -45,3 +45,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+def init_db_engine() -> AsyncEngine:
+    """Returns the initialized global async engine."""
+    return async_engine
+
+
+async def close_db_engine() -> None:
+    """Disposes and cleans up connection pools on application shutdown."""
+    await async_engine.dispose()
