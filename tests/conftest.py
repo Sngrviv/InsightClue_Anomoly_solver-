@@ -6,8 +6,16 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from src.config.settings import get_settings
+from src.database.session import async_engine
 
 settings = get_settings()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_global_engine():
+    """Automatically disposes global engine pool connections after each test to prevent loop leakage."""
+    yield
+    await async_engine.dispose()
 
 
 @pytest_asyncio.fixture
