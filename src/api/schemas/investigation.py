@@ -2,6 +2,8 @@
 Pydantic Schemas for Multi-Agent Investigation Reports and Streaming Events.
 """
 
+"Strictly for type checking "
+
 from datetime import datetime
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
