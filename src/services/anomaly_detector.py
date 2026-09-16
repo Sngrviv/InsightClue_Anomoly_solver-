@@ -215,9 +215,33 @@ class AnomalyDetectionEngine:
         # 2. Detect anomaly signals
         signals = self.scan_dataframe(df)
 
-        # 3. Convert to ORM AnomalyEvent records and save to DB
+        # 3. Fetch existing events to prevent duplicate insertions
+        existing_stmt = select(
+            AnomalyEvent.detected_at,
+            AnomalyEvent.region,
+            AnomalyEvent.product_name,
+            AnomalyEvent.customer_tier,
+            AnomalyEvent.metric_name,
+        )
+        existing_res = await session.execute(existing_stmt)
+        existing_keys = {
+            (
+                row.detected_at.date() if hasattr(row.detected_at, "date") else row.detected_at,
+                row.region,
+                row.product_name,
+                row.customer_tier,
+                row.metric_name,
+            )
+            for row in existing_res.all()
+        }
+
+        # 4. Insert only new unique anomaly events
         created_events: list[AnomalyEvent] = []
         for sig in signals:
+            key = (sig.metric_date, sig.region, sig.product_name, sig.customer_tier, sig.metric_name)
+            if key in existing_keys:
+                continue
+
             event = AnomalyEvent(
                 detected_at=datetime.combine(sig.metric_date, datetime.min.time(), tzinfo=timezone.utc),
                 metric_name=sig.metric_name,
@@ -233,6 +257,12 @@ class AnomalyDetectionEngine:
             )
             session.add(event)
             created_events.append(event)
+            existing_keys.add(key)
 
-        await session.commit()
-        return created_events
+        if created_events:
+            await session.commit()
+
+        # Return all persisted anomaly events from database
+        all_events_stmt = select(AnomalyEvent).order_by(AnomalyEvent.id.asc())
+        all_events_res = await session.execute(all_events_stmt)
+        return list(all_events_res.scalars().all())
