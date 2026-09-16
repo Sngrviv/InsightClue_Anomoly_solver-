@@ -2,6 +2,7 @@
 Metrics overview and aggregate KPI routes.
 """
 
+from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,3 +45,29 @@ async def get_metrics_overview(db: AsyncSession = Depends(get_db)) -> MetricsOve
         open_anomalies_count=int(open_anom),
         critical_anomalies_count=int(critical_anom),
     )
+
+
+@router.get("/timeseries")
+async def get_metrics_timeseries(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    """
+    Returns daily aggregated timeseries data for Chart.js visualization.
+    """
+    stmt = (
+        select(
+            DailySpendMetric.metric_date,
+            func.sum(DailySpendMetric.daily_spend_amount).label("daily_spend"),
+            func.avg(DailySpendMetric.success_rate_pct).label("avg_success_rate"),
+            func.sum(DailySpendMetric.transaction_count).label("tx_count"),
+        )
+        .group_by(DailySpendMetric.metric_date)
+        .order_by(DailySpendMetric.metric_date.asc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return {
+        "dates": [row.metric_date.isoformat() for row in rows],
+        "spend": [round(float(row.daily_spend), 2) for row in rows],
+        "success_rate": [round(float(row.avg_success_rate), 2) for row in rows],
+        "transactions": [int(row.tx_count) for row in rows],
+    }

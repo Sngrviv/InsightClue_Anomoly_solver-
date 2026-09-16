@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InsightClue — Autonomous AI Data Detective Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Chart.js & Marked.js CDNs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="logo-group">
+            <div class="logo-badge">IC</div>
+            <div>
+                <div class="logo-title">InsightClue AI Detective</div>
+                <div class="logo-subtitle">Enterprise FinTech Anomaly Detection & Multi-Agent RCA</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button id="btn-scan-detect" class="btn btn-primary">
+                ⚡ Run Detection Scan
+            </button>
+            <a href="/docs" target="_blank" class="btn btn-secondary">
+                📖 Swagger API
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Container -->
+    <main class="dashboard-container">
+        <!-- 1. KPI Stats Cards Grid -->
+        <section class="kpi-grid">
+            <div class="kpi-card">
+                <span class="kpi-label">90-Day Gross Volume</span>
+                <span id="kpi-total-spend" class="kpi-value">--</span>
+                <span class="kpi-subtext">Across all regions & tiers</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Total Transactions</span>
+                <span id="kpi-total-tx" class="kpi-value">--</span>
+                <span class="kpi-subtext">21,840 daily metric records</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Average Success Rate</span>
+                <span id="kpi-success-rate" class="kpi-value" style="color: var(--accent-emerald);">--</span>
+                <span class="kpi-subtext">Global authorization baseline</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Open Incidents</span>
+                <span id="kpi-open-anomalies" class="kpi-value" style="color: var(--accent-amber);">--</span>
+                <span class="kpi-subtext">Awaiting AI investigation</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Critical Severity</span>
+                <span id="kpi-critical-anomalies" class="kpi-value" style="color: var(--accent-rose);">--</span>
+                <span class="kpi-subtext">Z-Score &le; -4.0&sigma; drops</span>
+            </div>
+        </section>
+
+        <!-- 2. Main Two-Column Layout -->
+        <div class="main-layout">
+            <!-- Left Column: Timeseries Chart & Incident Feed -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Timeseries Chart Panel -->
+                <section class="panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">📈 90-Day FinTech Spend & Authorization Trends</h2>
+                    </div>
+                    <div style="height: 240px; position: relative;">
+                        <canvas id="chart-timeseries"></canvas>
+                    </div>
+                </section>
+
+                <!-- Anomaly Incidents Panel -->
+                <section class="panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">🚨 Detected Telemetry Anomalies</h2>
+                        <div class="filter-bar">
+                            <button class="filter-btn active" data-filter="ALL">All</button>
+                            <button class="filter-btn" data-filter="CRITICAL">Critical</button>
+                            <button class="filter-btn" data-filter="HIGH">High</button>
+                            <button class="filter-btn" data-filter="OPEN">Open</button>
+                            <button class="filter-btn" data-filter="RESOLVED">Resolved</button>
+                        </div>
+                    </div>
+                    <div id="anomalies-container" class="anomaly-list">
+                        <!-- Loaded dynamically via app.js -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Live Multi-Agent Streaming Console & RCA Report -->
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Live Agent Streaming Terminal Panel -->
+                <section class="panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">🤖 Live Multi-Agent Investigation Stream (SSE)</h2>
+                        <span class="badge badge-open">Real-Time EventSource</span>
+                    </div>
+                    <div id="terminal-log" class="terminal-window">
+                        <div style="color: #64748b; font-style: italic;">
+                            Select an anomaly incident on the left and click "Investigate" to dispatch the autonomous LangGraph squad...
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Executive RCA Report Panel -->
+                <section class="panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">📋 Executive Root Cause Analysis (RCA) Verdict</h2>
+                    </div>
+                    <div id="report-container" class="report-view">
+                        <div style="color: #64748b; font-style: italic;">
+                            No active report loaded. Run an investigation to view synthesized root causes and mitigation plans.
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

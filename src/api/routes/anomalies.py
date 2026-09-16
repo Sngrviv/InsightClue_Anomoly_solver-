@@ -61,7 +61,7 @@ async def list_anomalies(
     anomalies = result.scalars().all()
 
     return AnomalyListResponse(
-        total=int(total_count),
+        total=total_count,
         items=[AnomalyResponse.model_validate(a) for a in anomalies],
     )
 

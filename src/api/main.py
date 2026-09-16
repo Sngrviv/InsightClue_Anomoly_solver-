@@ -6,9 +6,13 @@ anomaly detection triggers, and autonomous multi-agent RCA investigations.
 
 from contextlib import asynccontextmanager
 import logging
+import os
+from pathlib import Path
 from typing import AsyncGenerator
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from src.api.routes import api_v1_router
 from src.config.settings import get_settings
 from src.database.session import close_db_engine, init_db_engine
@@ -51,6 +55,18 @@ app.add_middleware(
 
 # Register API v1 Routers
 app.include_router(api_v1_router)
+
+# Mount Static Dashboard Files
+static_path = Path(__file__).resolve().parent.parent / "static"
+if static_path.exists():
+    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def serve_dashboard() -> FileResponse:
+    """Serves the Single-Page FinTech Mission Control Dashboard."""
+    index_file = static_path / "index.html"
+    return FileResponse(str(index_file))
 
 
 @app.get("/health", tags=["Health"])

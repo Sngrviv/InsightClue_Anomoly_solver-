@@ -74,6 +74,26 @@ async def test_metrics_overview_endpoint(api_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_metrics_timeseries_endpoint(api_client: AsyncClient) -> None:
+    res = await api_client.get("/api/v1/metrics/timeseries")
+    assert res.status_code == 200
+    data = res.json()
+    assert "dates" in data
+    assert "spend" in data
+    assert "success_rate" in data
+    assert len(data["dates"]) > 0
+    assert len(data["spend"]) == len(data["dates"])
+
+
+@pytest.mark.asyncio
+async def test_serve_dashboard_endpoint(api_client: AsyncClient) -> None:
+    res = await api_client.get("/")
+    assert res.status_code == 200
+    assert "InsightClue" in res.text
+    assert "chart-timeseries" in res.text
+
+
+@pytest.mark.asyncio
 async def test_list_anomalies_endpoint(api_client: AsyncClient) -> None:
     # 1. Unfiltered query
     res = await api_client.get("/api/v1/anomalies?limit=10")
