@@ -29,6 +29,8 @@ Traditional Business Intelligence (BI) dashboards (Tableau, PowerBI) only report
 
 ## 🏗️ End-to-End System Architecture
 
+![InsightClue Technology Architecture](tech_architecture.svg)
+
 ```
                     ┌─────────────────────────────────────────┐
                     │       FinTech Data Stores (Postgres)    │
@@ -251,5 +253,20 @@ The simulation dataset includes realistic planted failure incidents to benchmark
 
 ---
 
+## 📚 External Benchmarking Datasets (Kaggle & Open FinTech)
+
+To evaluate InsightClue across diverse real-world telemetry, machine logs, and consumer grievances:
+
+| Dataset | Platform & Link | Modality | InsightClue Target Table |
+|---|---|---|---|
+| **CFPB Consumer Complaints** | [Kaggle Dataset](https://www.kaggle.com/datasets/cfpb/us-consumer-finance-complaints) | NLP Grievance Text | `dispute_tickets` (pgvector cosine search) |
+| **PaySim Mobile Money** | [Kaggle Dataset](https://www.kaggle.com/datasets/ealaxi/paysim1) | Transaction Aggregates | `daily_spend_metrics` (Z-Score & Isolation Forest) |
+| **IEEE-CIS Fraud Detection** | [Kaggle Competition](https://www.kaggle.com/c/ieee-fraud-detection) | Transaction + Network Logs | `payment_gateway_logs` (SQL Sandbox Queries) |
+| **Banking77** | [Hugging Face](https://huggingface.co/datasets/PolyAI/banking77) | Customer Intent Classification | Support RAG Citation & Topic Verification |
+| **Numenta Anomaly Benchmark (NAB)** | [Kaggle NAB](https://www.kaggle.com/datasets/boltzmannbrain/nab) | Streaming KPI Time-Series | Anomaly Detection Performance & Early Detection |
+
+---
+
 ## 📄 License
 MIT License. Built for advanced hands-on AI Engineering & Autonomous Agentic systems mastery.
+

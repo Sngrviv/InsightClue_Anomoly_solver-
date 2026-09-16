@@ -1,0 +1,191 @@
+meta:
+  profile: default
+  theme: tech-blue
+  layout: hierarchical
+  title: "InsightClue Enterprise Technology Architecture & Multi-Agent Stack"
+  description: "End-to-End Technology Flow: FastAPI, LangGraph, SQLAlchemy 2.0, PostgreSQL 16 + pgvector, Redis, and Scikit-Learn"
+
+nodes:
+  # 1. UI & Client Presentation Layer
+  - id: dashboard_ui
+    label: "Mission Control Dashboard\n(Vanilla JS • CSS3 • Chart.js)"
+    type: terminal
+
+  - id: sse_client
+    label: "Browser EventSource\n(Real-Time SSE Stream Consumer)"
+    type: terminal
+
+  # 2. FastAPI Async Application Layer
+  - id: fastapi_gateway
+    label: "FastAPI Async Web Gateway\n(Python 3.13 • ASGI • Uvicorn)"
+    type: gateway
+
+  - id: sse_stream_router
+    label: "SSE Streaming Engine\n(Async Generator • EventSource Emitter)"
+    type: process
+
+  - id: rest_api_router
+    label: "REST API Router\n(/metrics • /anomalies • /investigations)"
+    type: router
+
+  # 3. Ingestion & Anomaly Detection Layer
+  - id: dataset_adapter
+    label: "Universal Dataset Adapter\n(Pandas • Chunked CSV / SQLite Seam)"
+    type: process
+
+  - id: anomaly_engine
+    label: "Anomaly Detection Engine\n(Rolling Z-Score & Scikit-Learn Isolation Forest)"
+    type: process
+
+  # 4. Multi-Agent Autonomous Squad (LangGraph)
+  - id: langgraph_blackboard
+    label: "InvestigationState Blackboard\n(LangGraph StateGraph Reducers)"
+    type: memory
+
+  - id: supervisor_agent
+    label: "Lead Detective Supervisor\n(LangGraph Orchestrator & Hypothesis Planner)"
+    type: agent
+
+  - id: sql_analytics_agent
+    label: "SQL Analytics Agent\n(Telemetry Query Specialist)"
+    type: agent
+
+  - id: vector_rag_agent
+    label: "Vector RAG Agent\n(Customer Dispute Analyst)"
+    type: agent
+
+  - id: rca_synthesis_agent
+    label: "RCA Synthesis Agent\n(Confidence Scoring & Evidence Report)"
+    type: agent
+
+  # 5. Security Guardrails & Embeddings
+  - id: safe_sql_sandbox
+    label: "Safe Read-Only SQL Sandbox\n(AST & Regex Guardrails • LIMIT 50)"
+    type: tool
+
+  - id: embedding_service
+    label: "Embedding Engine\n(FastEmbed ONNX & Gemini Embedding 2 • 768-dim)"
+    type: embed
+
+  - id: ticket_vector_store
+    label: "TicketVectorStore\n(Semantic Search • Regional & Product Filters)"
+    type: vector_store
+
+  # 6. Database, Vector Store & Caching Layer
+  - id: sqlalchemy_orm
+    label: "SQLAlchemy 2.0 Async ORM\n(AsyncSession • AsyncEngine • asyncpg)"
+    type: service
+
+  - id: postgres_relational
+    label: "PostgreSQL 16 Relational Engine\n(Metrics • Gateway Logs • Anomalies • RCA Reports)"
+    type: database
+
+  - id: pgvector_extension
+    label: "PostgreSQL pgvector Extension\n(HNSW Index • Cosine Distance <=>)"
+    type: vector_store
+
+  - id: redis_cache
+    label: "Redis 7 Cache & Pub/Sub\n(Session Store & Fast Key-Value Cache)"
+    type: memory
+
+edges:
+  # UI -> FastAPI
+  - from: dashboard_ui
+    to: rest_api_router
+    label: "HTTP REST Requests"
+
+  - from: sse_stream_router
+    to: sse_client
+    label: "Live SSE Agent Stream"
+
+  - from: sse_client
+    to: dashboard_ui
+    label: "Render Live Thoughts & RCA"
+
+  # FastAPI Internal Routing
+  - from: rest_api_router
+    to: anomaly_engine
+    label: "Trigger Scan"
+
+  - from: rest_api_router
+    to: supervisor_agent
+    label: "Start Investigation"
+
+  - from: sse_stream_router
+    to: langgraph_blackboard
+    label: "Stream State Updates"
+
+  # Data Ingestion -> Anomaly Engine & DB
+  - from: dataset_adapter
+    to: embedding_service
+    label: "Batch Embed Narratives"
+
+  - from: dataset_adapter
+    to: sqlalchemy_orm
+    label: "Persist Ingested Records"
+
+  - from: anomaly_engine
+    to: sqlalchemy_orm
+    label: "Read Metrics / Save Anomalies"
+
+  # LangGraph Multi-Agent Orchestration
+  - from: supervisor_agent
+    to: langgraph_blackboard
+    label: "Update Hypothesis"
+
+  - from: supervisor_agent
+    to: sql_analytics_agent
+    label: "Dispatch SQL Track"
+
+  - from: supervisor_agent
+    to: vector_rag_agent
+    label: "Dispatch RAG Track"
+
+  - from: sql_analytics_agent
+    to: safe_sql_sandbox
+    label: "Validate & Run SELECT"
+
+  - from: safe_sql_sandbox
+    to: sqlalchemy_orm
+    label: "Execute Read-Only Query"
+
+  - from: vector_rag_agent
+    to: ticket_vector_store
+    label: "Semantic Query"
+
+  - from: ticket_vector_store
+    to: embedding_service
+    label: "Generate Query Vector"
+
+  - from: ticket_vector_store
+    to: sqlalchemy_orm
+    label: "Query pgvector"
+
+  - from: sql_analytics_agent
+    to: rca_synthesis_agent
+    label: "Quantitative Evidence"
+
+  - from: vector_rag_agent
+    to: rca_synthesis_agent
+    label: "Qualitative Evidence"
+
+  - from: rca_synthesis_agent
+    to: langgraph_blackboard
+    label: "Synthesize Final RCA Verdict"
+
+  - from: rca_synthesis_agent
+    to: sqlalchemy_orm
+    label: "Persist InvestigationReport"
+
+  # ORM -> Database & Storage
+  - from: sqlalchemy_orm
+    to: postgres_relational
+    label: "Read/Write Relational Tables"
+
+  - from: sqlalchemy_orm
+    to: pgvector_extension
+    label: "HNSW Vector Operations"
+
+  - from: fastapi_gateway
+    to: redis_cache
+    label: "Cache & Async Pub/Sub"
