@@ -89,6 +89,7 @@ async def trigger_investigation(
         "z_score": anomaly.z_score,
         "severity": anomaly.severity,
         "trigger_source": "API_TRIGGER",
+        "dataset_source": getattr(anomaly, "dataset_source", "FINTECH_90D"),
         "active_hypothesis": f"Investigating {anomaly.metric_name} in {anomaly.region}.",
         "iteration_count": 0,
         "sql_history": [],
@@ -140,7 +141,7 @@ async def stream_investigation_events(anomaly_id: int) -> StreamingResponse:
                 return
 
             # Yield Anomaly Info
-            yield f"event: anomaly_info\ndata: {json.dumps({'id': anomaly.id, 'metric': anomaly.metric_name, 'region': anomaly.region, 'product': anomaly.product_name, 'severity': anomaly.severity, 'actual': anomaly.actual_value, 'expected': anomaly.expected_value})}\n\n"
+            yield f"event: anomaly_info\ndata: {json.dumps({'id': anomaly.id, 'metric': anomaly.metric_name, 'region': anomaly.region, 'product': anomaly.product_name, 'severity': anomaly.severity, 'actual': anomaly.actual_value, 'expected': anomaly.expected_value, 'dataset_source': getattr(anomaly, 'dataset_source', 'FINTECH_90D')})}\n\n"
             await asyncio.sleep(0.1)
 
             # Build initial state
@@ -157,6 +158,7 @@ async def stream_investigation_events(anomaly_id: int) -> StreamingResponse:
                 "z_score": anomaly.z_score,
                 "severity": anomaly.severity,
                 "trigger_source": "SSE_STREAM",
+                "dataset_source": getattr(anomaly, "dataset_source", "FINTECH_90D"),
                 "active_hypothesis": f"Investigating {anomaly.metric_name} in {anomaly.region}.",
                 "iteration_count": 0,
                 "sql_history": [],

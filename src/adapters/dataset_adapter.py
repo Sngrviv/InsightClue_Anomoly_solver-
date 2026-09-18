@@ -223,6 +223,7 @@ class UniversalDatasetAdapter:
         self,
         records: list[dict[str, Any]],
         session: AsyncSession,
+        dataset_source: str = "KAGGLE_CFPB",
         batch_size: int = 50,
     ) -> int:
         """
@@ -231,6 +232,7 @@ class UniversalDatasetAdapter:
         if not records:
             return 0
 
+        import asyncio
         inserted_count = 0
         total = len(records)
 
@@ -238,11 +240,12 @@ class UniversalDatasetAdapter:
             batch = records[i : i + batch_size]
             messages = [r["message"] for r in batch]
 
-            # Generate 768-dim embeddings in batch via generate_embeddings_batch
-            embeddings = generate_embeddings_batch(messages)
+            # Generate 768-dim embeddings in batch via worker thread to prevent event-loop block
+            embeddings = await asyncio.to_thread(generate_embeddings_batch, messages)
 
             for rec, emb in zip(batch, embeddings):
                 ticket = DisputeSupportTicket(
+                    dataset_source=dataset_source,
                     ticket_created_at=rec["ticket_created_at"],
                     region=rec["region"],
                     product_name=rec["product_name"],
@@ -268,6 +271,7 @@ class UniversalDatasetAdapter:
         self,
         records: list[dict[str, Any]],
         session: AsyncSession,
+        dataset_source: str = "KAGGLE_CFPB",
     ) -> int:
         """
         Aggregates complaint counts and disputes into daily_spend_metrics for time-series anomaly scanning.
@@ -286,23 +290,24 @@ class UniversalDatasetAdapter:
 
         inserted_count = 0
         for _, row in grouped.iterrows():
-            total_tx = max(int(row["complaint_count"]) * 10, 100)
+            complaint_count = int(row["complaint_count"])
             disputes = int(row["disputed_count"])
-            chargeback_rate = (disputes / total_tx) * 100.0 if total_tx > 0 else 0.1
+            chargeback_rate = (disputes / complaint_count * 100.0) if complaint_count > 0 else 0.0
 
             metric = DailySpendMetric(
+                dataset_source=dataset_source,
                 metric_date=row["metric_date"],
                 region=str(row["region"]),
                 product_name=str(row["product_name"]),
                 customer_tier=str(row["customer_tier"]),
-                merchant_category="Financial Services",
-                daily_spend_amount=float(total_tx * 125.0),
-                transaction_count=total_tx,
-                avg_ticket_size=125.0,
-                success_rate_pct=max(99.0 - (disputes * 1.5), 75.0),
-                avg_latency_ms=250.0 + (disputes * 50.0),
+                merchant_category="CFPB Grievances",
+                daily_spend_amount=float(complaint_count * 250.0),
+                transaction_count=complaint_count,
+                avg_ticket_size=250.0,
+                success_rate_pct=max(100.0 - chargeback_rate, 5.0),
+                avg_latency_ms=180.0 + (disputes * 40.0),
                 chargeback_rate_pct=chargeback_rate,
-                avg_fraud_risk_score=min(5.0 + (disputes * 8.0), 95.0),
+                avg_fraud_risk_score=min(disputes * 20.0, 95.0),
             )
             session.add(metric)
             inserted_count += 1
@@ -317,6 +322,7 @@ class UniversalDatasetAdapter:
         mapping: DatasetSchemaMapping,
         session: AsyncSession,
         max_records: int = 1000,
+        dataset_source: str = "KAGGLE_CFPB",
     ) -> IngestionResult:
         """
         Full end-to-end ingestion pipeline: load, embed, and aggregate.
@@ -324,8 +330,8 @@ class UniversalDatasetAdapter:
         start_time = datetime.now(timezone.utc)
 
         records = self.load_and_normalize_records(source_path, mapping, max_records=max_records)
-        tickets_count = await self.ingest_dispute_tickets(records, session)
-        metrics_count = await self.aggregate_to_daily_metrics(records, session)
+        tickets_count = await self.ingest_dispute_tickets(records, session, dataset_source=dataset_source)
+        metrics_count = await self.aggregate_to_daily_metrics(records, session, dataset_source=dataset_source)
 
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
 

@@ -194,6 +194,7 @@ class InvestigationGraphBuilder:
             query=query,
             region=state.get("region"),
             product_name=state.get("product_name"),
+            dataset_source=state.get("dataset_source"),
             limit=5,
         )
 

@@ -14,6 +14,7 @@ class AnomalyEvent(Base):
     __tablename__ = "anomaly_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_source: Mapped[str] = mapped_column(String(50), default="FINTECH_90D", nullable=False, index=True)
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

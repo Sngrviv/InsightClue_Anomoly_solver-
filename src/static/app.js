@@ -1,11 +1,14 @@
 /**
  * InsightClue Dashboard Application Logic
- * Integrates Chart.js, REST APIs, Live Multi-Agent Stepper, and Real-Time SSE Streaming.
+ * Supports Multi-Dataset Partitioning:
+ * - FINTECH_90D: Synthetic 90-day FinTech transaction telemetry
+ * - KAGGLE_CFPB: Real-world Kaggle Consumer Financial Protection Bureau complaint records
  */
 
 let metricsChart = null;
 let currentEventSource = null;
 let activeFilter = 'ALL';
+let currentDatasetSource = 'FINTECH_90D';
 
 document.addEventListener('DOMContentLoaded', () => {
     loadOverviewKPIs();
@@ -14,19 +17,128 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
 });
 
-function setupEventListeners() {
-    document.getElementById('btn-scan-detect').addEventListener('click', runDetectionScan);
-    document.getElementById('btn-ingest-cfpb').addEventListener('click', triggerCFPBIngestion);
+// Toast Notification Manager
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
 
-    // Filter Buttons
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+    if (type === 'warning') icon = '⚠️';
+    if (type === 'loading') icon = '⏳';
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-msg">${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('toast-fadeout');
+        setTimeout(() => toast.remove(), 400);
+    }, 4500);
+}
+
+function setupEventListeners() {
+    // Dataset Mode Switcher
+    const datasetSelect = document.getElementById('dataset-mode-select');
+    if (datasetSelect) {
+        datasetSelect.addEventListener('change', (e) => {
+            currentDatasetSource = e.target.value;
+            showToast(`Switched active view to: ${currentDatasetSource === 'KAGGLE_CFPB' ? '🏛️ CFPB Consumer Grievances' : '💳 90-Day FinTech Telemetry'}`, 'info');
+            loadOverviewKPIs();
+            loadTimeseriesChart();
+            loadAnomalies();
+        });
+    }
+
+    // Header Buttons
+    const btnScan = document.getElementById('btn-scan-detect');
+    if (btnScan) btnScan.addEventListener('click', runDetectionScan);
+
+    const btnIngest = document.getElementById('btn-ingest-cfpb');
+    if (btnIngest) btnIngest.addEventListener('click', triggerCFPBIngestion);
+
+    // Interactive 4-Step Workflow Ribbon Navigation
+    const step1 = document.getElementById('step-1');
+    if (step1) {
+        step1.addEventListener('click', () => {
+            setWorkflowStep(1);
+            runDetectionScan();
+        });
+    }
+
+    const step2 = document.getElementById('step-2');
+    if (step2) {
+        step2.addEventListener('click', () => {
+            setWorkflowStep(2);
+            activeFilter = 'ALL';
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            const allBtn = document.querySelector('.filter-btn[data-filter="ALL"]');
+            if (allBtn) allBtn.classList.add('active');
+            loadAnomalies();
+            document.getElementById('anomalies-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            showToast('Showing all detected anomalies in feed.', 'info');
+        });
+    }
+
+    const step3 = document.getElementById('step-3');
+    if (step3) {
+        step3.addEventListener('click', () => {
+            setWorkflowStep(3);
+            document.getElementById('terminal-log')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showToast('Select an incident card from the feed or click "Investigate".', 'info');
+        });
+    }
+
+    const step4 = document.getElementById('step-4');
+    if (step4) {
+        step4.addEventListener('click', () => {
+            setWorkflowStep(4);
+            document.getElementById('report-container')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
+    // Filter Buttons (using currentTarget for robust delegation)
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            activeFilter = e.target.dataset.filter;
+            const target = e.currentTarget;
+            target.classList.add('active');
+            activeFilter = target.dataset.filter || 'ALL';
             loadAnomalies();
+            showToast(`Filtered incidents by: ${activeFilter}`, 'info');
         });
     });
+
+    // Event Delegation on Anomaly Feed Container
+    const feedContainer = document.getElementById('anomalies-container');
+    if (feedContainer) {
+        feedContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-investigate');
+            if (btn) {
+                e.stopPropagation();
+                const anomalyId = parseInt(btn.dataset.anomalyId, 10);
+                if (anomalyId) {
+                    startInvestigation(anomalyId);
+                }
+                return;
+            }
+
+            const card = e.target.closest('.anomaly-card');
+            if (card && card.dataset.anomalyId) {
+                const anomalyId = parseInt(card.dataset.anomalyId, 10);
+                if (anomalyId) {
+                    startInvestigation(anomalyId);
+                }
+            }
+        });
+    }
 }
 
 function setWorkflowStep(stepNumber) {
@@ -46,15 +158,75 @@ function setAgentStepperNode(activeNodeId) {
 // 1. Fetch Overview KPIs
 async function loadOverviewKPIs() {
     try {
-        const res = await fetch('/api/v1/metrics/overview');
+        const res = await fetch(`/api/v1/metrics/overview?dataset_source=${currentDatasetSource}`);
         if (!res.ok) throw new Error('Failed to fetch KPI overview');
         const data = await res.json();
 
-        document.getElementById('kpi-total-spend').textContent = '$' + (data.total_spend_90d / 1000000).toFixed(2) + 'M';
-        document.getElementById('kpi-total-tx').textContent = data.total_transactions.toLocaleString();
-        document.getElementById('kpi-success-rate').textContent = data.avg_success_rate_pct.toFixed(2) + '%';
-        document.getElementById('kpi-open-anomalies').textContent = data.open_anomalies_count;
-        document.getElementById('kpi-critical-anomalies').textContent = data.critical_anomalies_count;
+        const isCFPB = currentDatasetSource === 'KAGGLE_CFPB';
+
+        // Update KPI card text & labels dynamically
+        const icon1 = document.getElementById('kpi-icon-1');
+        const title1 = document.getElementById('kpi-title-1');
+        const spendEl = document.getElementById('kpi-total-spend');
+        const sub1 = document.getElementById('kpi-sub-1');
+
+        const icon2 = document.getElementById('kpi-icon-2');
+        const title2 = document.getElementById('kpi-title-2');
+        const txEl = document.getElementById('kpi-total-tx');
+        const sub2 = document.getElementById('kpi-sub-2');
+
+        const icon3 = document.getElementById('kpi-icon-3');
+        const title3 = document.getElementById('kpi-title-3');
+        const srEl = document.getElementById('kpi-success-rate');
+        const sub3 = document.getElementById('kpi-sub-3');
+
+        const openEl = document.getElementById('kpi-open-anomalies');
+        const critEl = document.getElementById('kpi-critical-anomalies');
+
+        if (isCFPB) {
+            if (icon1) icon1.textContent = '🏛️';
+            if (title1) title1.textContent = 'Estimated Exposure';
+            if (spendEl) spendEl.textContent = '$' + (data.total_spend_90d / 1000).toFixed(1) + 'k';
+            if (sub1) sub1.textContent = 'Across 11 grievance categories';
+
+            if (icon2) icon2.textContent = '🎫';
+            if (title2) title2.textContent = 'CFPB Complaints Ingested';
+            if (txEl) txEl.textContent = data.total_transactions.toLocaleString();
+            if (sub2) sub2.textContent = 'Embedded in pgvector vector space';
+
+            if (icon3) icon3.textContent = '⚖️';
+            if (title3) title3.textContent = 'Non-Dispute Resolution Rate';
+            if (srEl) srEl.textContent = data.avg_success_rate_pct.toFixed(1) + '%';
+            if (sub3) sub3.textContent = 'Settled without consumer dispute';
+
+            const chartTitle = document.getElementById('chart-panel-title');
+            const chartSub = document.getElementById('chart-panel-subtitle');
+            if (chartTitle) chartTitle.textContent = 'CFPB Daily Grievance Volume & Dispute Trends';
+            if (chartSub) chartSub.textContent = 'Monitor consumer complaint surges and critical dispute escalations over time';
+        } else {
+            if (icon1) icon1.textContent = '💳';
+            if (title1) title1.textContent = '90-Day Gross Volume';
+            if (spendEl) spendEl.textContent = '$' + (data.total_spend_90d / 1000000).toFixed(2) + 'M';
+            if (sub1) sub1.textContent = 'Across 4 regions & 5 products';
+
+            if (icon2) icon2.textContent = '📊';
+            if (title2) title2.textContent = 'Total Transactions';
+            if (txEl) txEl.textContent = data.total_transactions.toLocaleString();
+            if (sub2) sub2.textContent = '21,840 daily metric records';
+
+            if (icon3) icon3.textContent = '✅';
+            if (title3) title3.textContent = 'Avg Authorization Rate';
+            if (srEl) srEl.textContent = data.avg_success_rate_pct.toFixed(2) + '%';
+            if (sub3) sub3.textContent = 'Global baseline: 98.5%';
+
+            const chartTitle = document.getElementById('chart-panel-title');
+            const chartSub = document.getElementById('chart-panel-subtitle');
+            if (chartTitle) chartTitle.textContent = '90-Day FinTech Spend & Authorization Trends';
+            if (chartSub) chartSub.textContent = 'Monitor authorization rate dips and spend volume fluctuations';
+        }
+
+        if (openEl) openEl.textContent = data.open_anomalies_count;
+        if (critEl) critEl.textContent = data.critical_anomalies_count;
     } catch (err) {
         console.error('KPI Error:', err);
     }
@@ -62,16 +234,28 @@ async function loadOverviewKPIs() {
 
 // 2. Fetch & Render Timeseries Chart
 async function loadTimeseriesChart() {
+    const canvas = document.getElementById('chart-timeseries');
+    if (!canvas) return;
+
     try {
-        const res = await fetch('/api/v1/metrics/timeseries');
+        const res = await fetch(`/api/v1/metrics/timeseries?dataset_source=${currentDatasetSource}`);
         if (!res.ok) throw new Error('Failed to fetch timeseries');
         const data = await res.json();
 
-        const ctx = document.getElementById('chart-timeseries').getContext('2d');
+        const ctx = canvas.getContext('2d');
         
         if (metricsChart) {
             metricsChart.destroy();
         }
+
+        const isCFPB = currentDatasetSource === 'KAGGLE_CFPB';
+        const label1 = isCFPB ? 'Daily Grievance Count' : 'Daily Spend ($)';
+        const color1 = isCFPB ? '#a855f7' : '#38bdf8';
+        const bg1 = isCFPB ? 'rgba(168, 85, 247, 0.12)' : 'rgba(56, 189, 248, 0.08)';
+
+        const label2 = isCFPB ? 'Dispute Escalation Rate (%)' : 'Authorization Rate (%)';
+        const color2 = isCFPB ? '#f59e0b' : '#10b981';
+        const data2 = isCFPB ? data.dispute_rate : data.success_rate;
 
         metricsChart = new Chart(ctx, {
             type: 'line',
@@ -79,25 +263,25 @@ async function loadTimeseriesChart() {
                 labels: data.dates,
                 datasets: [
                     {
-                        label: 'Daily Spend ($)',
-                        data: data.spend,
-                        borderColor: '#38bdf8',
-                        backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                        label: label1,
+                        data: isCFPB ? data.transactions : data.spend,
+                        borderColor: color1,
+                        backgroundColor: bg1,
                         borderWidth: 2,
                         yAxisID: 'y',
                         tension: 0.25,
                         fill: true,
-                        pointRadius: 1,
+                        pointRadius: isCFPB ? 3 : 1,
                     },
                     {
-                        label: 'Authorization Rate (%)',
-                        data: data.success_rate,
-                        borderColor: '#10b981',
+                        label: label2,
+                        data: data2,
+                        borderColor: color2,
                         borderWidth: 2,
                         borderDash: [4, 4],
                         yAxisID: 'y1',
                         tension: 0.25,
-                        pointRadius: 1,
+                        pointRadius: isCFPB ? 3 : 1,
                     }
                 ]
             },
@@ -123,14 +307,14 @@ async function loadTimeseriesChart() {
                         display: true,
                         position: 'left',
                         grid: { color: 'rgba(148, 163, 184, 0.08)' },
-                        ticks: { color: '#38bdf8', font: { family: 'Inter', size: 10 } }
+                        ticks: { color: color1, font: { family: 'Inter', size: 10 } }
                     },
                     y1: {
                         type: 'linear',
                         display: true,
                         position: 'right',
                         grid: { drawOnChartArea: false },
-                        ticks: { color: '#10b981', min: 70, max: 100, font: { family: 'Inter', size: 10 } }
+                        ticks: { color: color2, font: { family: 'Inter', size: 10 } }
                     }
                 }
             }
@@ -143,10 +327,12 @@ async function loadTimeseriesChart() {
 // 3. Load Anomalies Feed with Plain-English Human Titles
 async function loadAnomalies() {
     const listContainer = document.getElementById('anomalies-container');
+    if (!listContainer) return;
+
     listContainer.innerHTML = '<div style="color: #64748b; padding: 1.5rem; text-align: center;">Loading incident telemetry...</div>';
 
     try {
-        let url = '/api/v1/anomalies?limit=50';
+        let url = `/api/v1/anomalies?dataset_source=${currentDatasetSource}&limit=50`;
         if (activeFilter === 'CRITICAL') url += '&severity=CRITICAL';
         if (activeFilter === 'HIGH') url += '&severity=HIGH';
         if (activeFilter === 'OPEN') url += '&status=OPEN';
@@ -157,7 +343,7 @@ async function loadAnomalies() {
         const data = await res.json();
 
         if (!data.items || data.items.length === 0) {
-            listContainer.innerHTML = '<div style="color: #64748b; padding: 1.5rem; text-align: center;">No matching incidents found. Click "Run Detection Scan" above to scan.</div>';
+            listContainer.innerHTML = `<div style="color: #64748b; padding: 1.5rem; text-align: center;">No matching incidents found in ${currentDatasetSource === 'KAGGLE_CFPB' ? 'Kaggle CFPB Grievances' : 'FinTech Telemetry'}. Click "⚡ Run Detection Scan" above to scan.</div>`;
             return;
         }
 
@@ -166,6 +352,7 @@ async function loadAnomalies() {
             const card = document.createElement('div');
             card.className = 'anomaly-card';
             card.id = `anomaly-card-${anom.id}`;
+            card.dataset.anomalyId = anom.id;
             
             const severityBadge = anom.severity === 'CRITICAL' ? 'badge-critical' : 'badge-high';
             const statusBadge = anom.status === 'RESOLVED' ? 'badge-resolved' : 'badge-open';
@@ -174,13 +361,13 @@ async function loadAnomalies() {
             let titleText = `${anom.product_name}: ${formatMetricName(anom.metric_name)}`;
             let summaryDesc = '';
             if (anom.metric_name === 'chargeback_dispute_spike') {
-                titleText = `🚨 ${anom.product_name}: High Dispute & Chargeback Spike`;
-                summaryDesc = `Surged to <strong>${anom.actual_value.toFixed(2)}%</strong> (Baseline: ${anom.expected_value.toFixed(2)}% • <span style="color: var(--accent-rose); font-weight: bold;">+${anom.deviation_pct.toFixed(0)}% deviation</span>)`;
+                titleText = `🚨 ${anom.product_name}: High Dispute Escalation Spike`;
+                summaryDesc = `Surged to <strong>${anom.actual_value.toFixed(1)}%</strong> (Baseline: ${anom.expected_value.toFixed(1)}% • <span style="color: var(--accent-rose); font-weight: bold;">+${anom.deviation_pct.toFixed(0)}% deviation</span>)`;
             } else if (anom.metric_name === 'success_rate_plunge') {
-                titleText = `⚡ ${anom.product_name}: Authorization Rate Drop`;
-                summaryDesc = `Dropped to <strong>${anom.actual_value.toFixed(2)}%</strong> (Baseline: ${anom.expected_value.toFixed(2)}% • <span style="color: var(--accent-amber); font-weight: bold;">${anom.deviation_pct.toFixed(1)}% drop</span>)`;
+                titleText = `⚡ ${anom.product_name}: Resolution Rate Drop`;
+                summaryDesc = `Dropped to <strong>${anom.actual_value.toFixed(1)}%</strong> (Baseline: ${anom.expected_value.toFixed(1)}% • <span style="color: var(--accent-amber); font-weight: bold;">${anom.deviation_pct.toFixed(1)}% drop</span>)`;
             } else {
-                summaryDesc = `Actual: <strong>${anom.actual_value.toFixed(2)}</strong> vs Expected: ${anom.expected_value.toFixed(2)} (${anom.deviation_pct > 0 ? '+' : ''}${anom.deviation_pct.toFixed(1)}%)`;
+                summaryDesc = `Actual: <strong>${anom.actual_value.toFixed(1)}</strong> vs Expected: ${anom.expected_value.toFixed(1)} (${anom.deviation_pct > 0 ? '+' : ''}${anom.deviation_pct.toFixed(1)}%)`;
             }
 
             const detectedDate = new Date(anom.detected_at).toLocaleDateString();
@@ -193,14 +380,14 @@ async function loadAnomalies() {
                         <span class="badge ${statusBadge}">${anom.status}</span>
                     </div>
                     <div class="anomaly-details">
-                        📍 <strong>${anom.region} Region</strong> &bull; ${anom.customer_tier || 'Enterprise'} Tier &bull; 🗓️ ${detectedDate}
+                        📍 <strong>${anom.region}</strong> &bull; ${anom.customer_tier || 'Retail'} Tier &bull; 🗓️ ${detectedDate}
                     </div>
                     <div class="anomaly-details">
                         ${summaryDesc}
                     </div>
                 </div>
                 <div>
-                    <button class="btn-investigate" onclick="startInvestigation(${anom.id})">
+                    <button class="btn-investigate" data-anomaly-id="${anom.id}">
                         🕵️ Investigate
                     </button>
                 </div>
@@ -220,20 +407,25 @@ function formatMetricName(metric) {
 // 4. Trigger Detection Scan
 async function runDetectionScan() {
     const btn = document.getElementById('btn-scan-detect');
+    if (!btn) return;
     const originalText = btn.innerHTML;
-    btn.innerHTML = '⏳ Scanning 21.8k Metrics...';
+    btn.innerHTML = '⏳ Scanning Telemetry...';
     btn.disabled = true;
 
     try {
         setWorkflowStep(1);
-        const res = await fetch('/api/v1/anomalies/detect', { method: 'POST' });
+        showToast(`Running Statistical & Isolation Forest scan on ${currentDatasetSource}...`, 'loading');
+        
+        const res = await fetch(`/api/v1/anomalies/detect?dataset_source=${currentDatasetSource}`, { method: 'POST' });
+        if (!res.ok) throw new Error(`Scan request failed (${res.status})`);
         const data = await res.json();
-        alert(`🎯 Detection Scan Complete!\n${data.message}`);
+        
+        showToast(`🎯 Scan Complete: ${data.new_anomalies_flagged} anomalies identified!`, 'success');
         await loadOverviewKPIs();
         await loadAnomalies();
         setWorkflowStep(2);
     } catch (err) {
-        alert('Detection scan failed: ' + err.message);
+        showToast('Detection scan failed: ' + err.message, 'error');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -243,16 +435,29 @@ async function runDetectionScan() {
 // 5. Ingest Kaggle CFPB Dataset Sample
 async function triggerCFPBIngestion() {
     const btn = document.getElementById('btn-ingest-cfpb');
+    if (!btn) return;
     const original = btn.innerHTML;
     btn.innerHTML = '⏳ Ingesting CFPB...';
     btn.disabled = true;
 
     try {
-        alert('Ingesting CFPB Kaggle dataset sample and computing vector embeddings in background...');
-        await fetch('/api/v1/anomalies/detect', { method: 'POST' });
+        showToast('Ingesting CFPB Kaggle complaints & generating vector embeddings...', 'loading');
+        const res = await fetch('/api/v1/anomalies/ingest-cfpb?limit=250', { method: 'POST' });
+        if (!res.ok) throw new Error(`Ingestion failed (${res.status})`);
+        const data = await res.json();
+        
+        showToast(`📂 Ingestion Success: ${data.message}`, 'success');
+        
+        // Auto-switch to KAGGLE_CFPB mode
+        currentDatasetSource = 'KAGGLE_CFPB';
+        const select = document.getElementById('dataset-mode-select');
+        if (select) select.value = 'KAGGLE_CFPB';
+
         await loadOverviewKPIs();
+        await loadTimeseriesChart();
         await loadAnomalies();
     } catch (e) {
+        showToast('CFPB Ingestion failed: ' + e.message, 'error');
         console.error(e);
     } finally {
         btn.innerHTML = original;
@@ -279,12 +484,17 @@ function startInvestigation(anomalyId) {
     }
 
     // Set Live Status
-    liveChip.className = 'live-status-chip active';
-    liveText.textContent = `Squad Investigating #${anomalyId}...`;
+    if (liveChip) liveChip.className = 'live-status-chip active';
+    if (liveText) liveText.textContent = `Squad Investigating #${anomalyId}...`;
     setAgentStepperNode('node-supervisor');
 
-    terminal.innerHTML = '';
-    reportContainer.innerHTML = '<div class="report-placeholder"><span>⏳ LangGraph Multi-Agent squad analyzing telemetry & customer tickets...</span></div>';
+    if (terminal) {
+        terminal.innerHTML = '';
+        terminal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (reportContainer) {
+        reportContainer.innerHTML = '<div class="report-placeholder"><span>⏳ LangGraph Multi-Agent squad analyzing telemetry & customer tickets...</span></div>';
+    }
 
     appendTerminalEntry('System Gateway', `🚀 Dispatching Autonomous AI Detective squad for Incident #${anomalyId}...`, 'agent-supervisor');
 
@@ -292,7 +502,7 @@ function startInvestigation(anomalyId) {
 
     currentEventSource.addEventListener('anomaly_info', (e) => {
         const data = JSON.parse(e.data);
-        appendTerminalEntry('Incident Context', `Target: ${data.region} Region • ${data.product} (${data.severity}) • Metric: ${data.metric}`, 'agent-supervisor');
+        appendTerminalEntry('Incident Context', `Target: ${data.region} • ${data.product} (${data.severity}) • Metric: ${data.metric}`, 'agent-supervisor');
     });
 
     currentEventSource.addEventListener('agent_thought', (e) => {
@@ -334,13 +544,16 @@ function startInvestigation(anomalyId) {
         appendTerminalEntry('RCA Synthesis Agent', `Final Root Cause Analysis generated with ${(data.confidence_score * 100).toFixed(1)}% confidence.`, 'agent-synthesis');
 
         // Render Clean Executive RCA Card
-        renderExecutiveRCA(data, reportContainer);
+        if (reportContainer) {
+            renderExecutiveRCA(data, reportContainer);
+        }
+        showToast('🎯 Executive RCA verdict synthesized!', 'success');
     });
 
     currentEventSource.addEventListener('complete', (e) => {
         appendTerminalEntry('System Gateway', '✅ Investigation stream completed and report persisted.', 'agent-supervisor');
-        liveChip.className = 'live-status-chip idle';
-        liveText.textContent = 'Squad Idle';
+        if (liveChip) liveChip.className = 'live-status-chip idle';
+        if (liveText) liveText.textContent = 'Squad Idle';
         currentEventSource.close();
         loadOverviewKPIs();
         loadAnomalies();
@@ -348,8 +561,8 @@ function startInvestigation(anomalyId) {
 
     currentEventSource.onerror = (err) => {
         console.warn('SSE stream completed or closed:', err);
-        liveChip.className = 'live-status-chip idle';
-        liveText.textContent = 'Squad Idle';
+        if (liveChip) liveChip.className = 'live-status-chip idle';
+        if (liveText) liveText.textContent = 'Squad Idle';
         currentEventSource.close();
     };
 }
@@ -359,8 +572,8 @@ function renderExecutiveRCA(data, container) {
     const summaryHtml = window.marked ? marked.parse(data.root_cause_summary) : data.root_cause_summary;
     
     // Parse mitigation lines into list items
-    const steps = (data.mitigation_steps || '').split('\n').filter(s => s.trim().length > 0);
-    const stepItems = steps.map(s => `<li class="action-item"><input type="checkbox" checked disabled> <span>${s.replace(/^\d+\.\s*/, '')}</span></li>`).join('');
+    const rawSteps = (data.mitigation_steps || '').split('\n').filter(s => s.trim().length > 0);
+    const stepItems = rawSteps.map(s => `<li class="action-item"><input type="checkbox" checked disabled> <span>${s.replace(/^\d+\.\s*/, '')}</span></li>`).join('');
 
     container.innerHTML = `
         <div class="rca-verdict-card">
@@ -369,9 +582,14 @@ function renderExecutiveRCA(data, container) {
                     <strong style="color: var(--accent-emerald); font-size: 1rem;">🎯 Executive Root Cause Established</strong>
                     <div style="font-size: 0.75rem; color: var(--text-secondary);">Synthesized across machine telemetry & customer support evidence</div>
                 </div>
-                <span class="badge badge-resolved" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
-                    ${confidencePct}% Confidence
-                </span>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span class="badge badge-resolved" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                        ${confidencePct}% Confidence
+                    </span>
+                    <button class="btn btn-secondary btn-sm" id="btn-copy-rca" onclick="copyRCAPlan()">
+                        📋 Copy Plan
+                    </button>
+                </div>
             </div>
 
             <div>
@@ -389,8 +607,20 @@ function renderExecutiveRCA(data, container) {
     `;
 }
 
+function copyRCAPlan() {
+    const report = document.getElementById('report-container');
+    if (!report) return;
+    const text = report.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('📋 RCA action plan copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Could not copy to clipboard.', 'warning');
+    });
+}
+
 function appendTerminalEntry(sender, text, senderClass) {
     const terminal = document.getElementById('terminal-log');
+    if (!terminal) return;
     
     // Remove placeholder if present
     const placeholder = terminal.querySelector('.terminal-placeholder');
@@ -405,3 +635,10 @@ function appendTerminalEntry(sender, text, senderClass) {
     terminal.appendChild(entry);
     terminal.scrollTop = terminal.scrollHeight;
 }
+
+// Global scope bindings
+window.startInvestigation = startInvestigation;
+window.runDetectionScan = runDetectionScan;
+window.triggerCFPBIngestion = triggerCFPBIngestion;
+window.copyRCAPlan = copyRCAPlan;
+window.showToast = showToast;

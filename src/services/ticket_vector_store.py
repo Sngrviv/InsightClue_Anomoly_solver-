@@ -36,6 +36,7 @@ class TicketVectorStore:
         product_name: str | None = None,
         customer_tier: str | None = None,
         issue_category: str | None = None,
+        dataset_source: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
         session: AsyncSession | None = None,
@@ -57,6 +58,9 @@ class TicketVectorStore:
             .where(DisputeSupportTicket.embedding.is_not(None))
             .where(sim_expr >= min_similarity)
         )
+
+        if dataset_source:
+            stmt = stmt.where(DisputeSupportTicket.dataset_source == dataset_source)
 
         if region:
             stmt = stmt.where(DisputeSupportTicket.region == region)

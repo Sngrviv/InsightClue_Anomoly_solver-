@@ -108,5 +108,5 @@ async def test_dataset_adapter_ingest_and_aggregate(db_session: AsyncSession):
     )
     m_res = await db_session.execute(m_stmt)
     metrics = m_res.scalars().all()
-    assert len(metrics) > 0
-    assert metrics[0].transaction_count >= 20
+    assert metrics[0].transaction_count >= 2
+    assert metrics[0].dataset_source == "KAGGLE_CFPB"

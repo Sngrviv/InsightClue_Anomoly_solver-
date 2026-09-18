@@ -23,6 +23,7 @@ class DisputeTicketRAGTool:
         region: str | None = None,
         product_name: str | None = None,
         customer_tier: str | None = None,
+        dataset_source: str | None = None,
         limit: int = 5,
         session: AsyncSession | None = None,
     ) -> list[TicketCitation]:
@@ -34,6 +35,7 @@ class DisputeTicketRAGTool:
             region=region,
             product_name=product_name,
             customer_tier=customer_tier,
+            dataset_source=dataset_source,
             limit=limit,
             session=session,
         )

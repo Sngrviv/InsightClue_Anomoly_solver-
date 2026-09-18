@@ -39,6 +39,7 @@ class AnomalyResponse(BaseModel):
     z_score: float
     severity: str
     status: str
+    dataset_source: str = "FINTECH_90D"
     investigation: AnomalyReportSummary | None = None
 
     model_config = ConfigDict(from_attributes=True)

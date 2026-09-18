@@ -52,6 +52,7 @@ class InvestigationState(TypedDict, total=False):
     z_score: float
     severity: str
     trigger_source: str
+    dataset_source: str
 
     # Agent Investigation Tracks
     active_hypothesis: str

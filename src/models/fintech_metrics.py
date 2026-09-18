@@ -13,6 +13,7 @@ class DailySpendMetric(Base):
     __tablename__ = "daily_spend_metrics"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dataset_source: Mapped[str] = mapped_column(String(50), default="FINTECH_90D", nullable=False, index=True)
     metric_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     region: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     product_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)

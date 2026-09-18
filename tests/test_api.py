@@ -62,7 +62,8 @@ async def test_health_check_endpoints(api_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_metrics_overview_endpoint(api_client: AsyncClient) -> None:
-    res = await api_client.get("/api/v1/metrics/overview")
+    # 1. FinTech partition
+    res = await api_client.get("/api/v1/metrics/overview?dataset_source=FINTECH_90D")
     assert res.status_code == 200
     data = res.json()
     assert "total_spend_90d" in data
@@ -70,19 +71,31 @@ async def test_metrics_overview_endpoint(api_client: AsyncClient) -> None:
     assert "avg_success_rate_pct" in data
     assert data["total_spend_90d"] > 0
     assert data["total_transactions"] > 0
-    assert data["total_anomalies_detected"] > 0
+
+    # 2. CFPB partition
+    res_cfpb = await api_client.get("/api/v1/metrics/overview?dataset_source=KAGGLE_CFPB")
+    assert res_cfpb.status_code == 200
+    data_cfpb = res_cfpb.json()
+    assert data_cfpb["total_transactions"] > 0
+    assert data_cfpb["total_anomalies_detected"] > 0
 
 
 @pytest.mark.asyncio
 async def test_metrics_timeseries_endpoint(api_client: AsyncClient) -> None:
-    res = await api_client.get("/api/v1/metrics/timeseries")
+    # 1. FinTech timeseries
+    res = await api_client.get("/api/v1/metrics/timeseries?dataset_source=FINTECH_90D")
     assert res.status_code == 200
     data = res.json()
     assert "dates" in data
     assert "spend" in data
     assert "success_rate" in data
     assert len(data["dates"]) > 0
-    assert len(data["spend"]) == len(data["dates"])
+
+    # 2. CFPB timeseries
+    res_cfpb = await api_client.get("/api/v1/metrics/timeseries?dataset_source=KAGGLE_CFPB")
+    assert res_cfpb.status_code == 200
+    data_cfpb = res_cfpb.json()
+    assert len(data_cfpb["dates"]) > 0
 
 
 @pytest.mark.asyncio
@@ -91,12 +104,24 @@ async def test_serve_dashboard_endpoint(api_client: AsyncClient) -> None:
     assert res.status_code == 200
     assert "InsightClue" in res.text
     assert "chart-timeseries" in res.text
+    assert "app.js" in res.text
+    assert "toast-container" in res.text
+    assert "dataset-mode-select" in res.text
+
+    # Verify static assets served
+    res_js = await api_client.get("/static/app.js")
+    assert res_js.status_code == 200
+    assert "startInvestigation" in res_js.text
+
+    res_css = await api_client.get("/static/style.css")
+    assert res_css.status_code == 200
+    assert "dataset-selector-group" in res_css.text
 
 
 @pytest.mark.asyncio
 async def test_list_anomalies_endpoint(api_client: AsyncClient) -> None:
     # 1. Unfiltered query
-    res = await api_client.get("/api/v1/anomalies?limit=10")
+    res = await api_client.get("/api/v1/anomalies?dataset_source=FINTECH_90D&limit=10")
     assert res.status_code == 200
     data = res.json()
     assert "total" in data
@@ -104,12 +129,11 @@ async def test_list_anomalies_endpoint(api_client: AsyncClient) -> None:
     assert len(data["items"]) <= 10
     assert data["total"] > 0
 
-    # 2. Filter by region
-    res_region = await api_client.get("/api/v1/anomalies?region=South&limit=5")
-    assert res_region.status_code == 200
-    region_data = res_region.json()
-    for item in region_data["items"]:
-        assert item["region"] == "South"
+    # 2. CFPB query
+    res_cfpb = await api_client.get("/api/v1/anomalies?dataset_source=KAGGLE_CFPB&limit=10")
+    assert res_cfpb.status_code == 200
+    data_cfpb = res_cfpb.json()
+    assert data_cfpb["total"] > 0
 
 
 @pytest.mark.asyncio

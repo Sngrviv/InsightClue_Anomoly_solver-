@@ -24,6 +24,13 @@
             </div>
         </div>
         <div class="header-actions">
+            <div class="dataset-selector-group">
+                <span class="selector-label">📂 Dataset:</span>
+                <select id="dataset-mode-select" class="dataset-select">
+                    <option value="FINTECH_90D">💳 90-Day FinTech Telemetry</option>
+                    <option value="KAGGLE_CFPB">🏛️ CFPB Consumer Grievances (Kaggle)</option>
+                </select>
+            </div>
             <button id="btn-scan-detect" class="btn btn-primary">
                 ⚡ Run Detection Scan
             </button>
@@ -76,27 +83,27 @@
         <!-- 1. Executive KPI Summary Cards -->
         <section class="kpi-grid">
             <div class="kpi-card">
-                <div class="kpi-icon-bg">💳</div>
+                <div class="kpi-icon-bg" id="kpi-icon-1">💳</div>
                 <div>
-                    <span class="kpi-label">90-Day Gross Volume</span>
+                    <span id="kpi-title-1" class="kpi-label">90-Day Gross Volume</span>
                     <span id="kpi-total-spend" class="kpi-value">--</span>
-                    <span class="kpi-subtext">Across 4 regions & 5 products</span>
+                    <span id="kpi-sub-1" class="kpi-subtext">Across 4 regions & 5 products</span>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon-bg">📊</div>
+                <div class="kpi-icon-bg" id="kpi-icon-2">📊</div>
                 <div>
-                    <span class="kpi-label">Total Transactions</span>
+                    <span id="kpi-title-2" class="kpi-label">Total Transactions</span>
                     <span id="kpi-total-tx" class="kpi-value">--</span>
-                    <span class="kpi-subtext">21,840 daily metric records</span>
+                    <span id="kpi-sub-2" class="kpi-subtext">21,840 daily metric records</span>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon-bg">✅</div>
+                <div class="kpi-icon-bg" id="kpi-icon-3">✅</div>
                 <div>
-                    <span class="kpi-label">Avg Authorization Rate</span>
+                    <span id="kpi-title-3" class="kpi-label">Avg Authorization Rate</span>
                     <span id="kpi-success-rate" class="kpi-value text-emerald">--</span>
-                    <span class="kpi-subtext">Global baseline: 98.5%</span>
+                    <span id="kpi-sub-3" class="kpi-subtext">Global baseline: 98.5%</span>
                 </div>
             </div>
             <div class="kpi-card">
@@ -127,8 +134,8 @@
                         <div class="panel-title-group">
                             <span class="panel-icon">📈</span>
                             <div>
-                                <h2 class="panel-title">90-Day FinTech Spend & Authorization Trends</h2>
-                                <p class="panel-subtitle">Monitor authorization rate dips and spend volume fluctuations</p>
+                                <h2 id="chart-panel-title" class="panel-title">90-Day FinTech Spend & Authorization Trends</h2>
+                                <p id="chart-panel-subtitle" class="panel-subtitle">Monitor authorization rate dips and spend volume fluctuations</p>
                             </div>
                         </div>
                     </div>
@@ -238,5 +245,11 @@
             </div>
         </div>
     </main>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Application JavaScript -->
+    <script src="/static/app.js"></script>
 </body>
 </html>
