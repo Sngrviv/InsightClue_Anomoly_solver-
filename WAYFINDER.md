@@ -10,19 +10,20 @@ Eliminate all shallow boilerplate, layer bloat, and AI slob from InsightClue by 
 
 - **Domain Glossary**: [CONTEXT.md](file:///d:/Projects/Self_learn/Major%20project/CONTEXT.md)
 - **Primary Skills**: `codebase-design`, `grilling`, `domain-modeling`, `improve-codebase-architecture`
-- **Architectural Principles**: Deep modules over shallow wrappers, "the interface is the test surface", high locality, strong seams, and explicit async database session lifecycle.
+- **Architectural Principles**: Deep modules over shallow wrappers, "the interface is the test surface", high locality, strong seams, dynamic dataset generalization, and explicit async database session lifecycle.
 
 ## Decisions so far
 
 - [001 - Deepen TicketVectorStore Interface & Encapsulation](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/001-deepen-ticket-vector-store.md): Unified embedding generation, LRU query caching, and pgvector batch indexing inside `TicketVectorStore` behind `search()` and `index_tickets()` methods.
+- [002 - Deepen AnomalyDetectionEngine Architecture](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/002-deepen-anomaly-detection-engine.md): Streamlined `AnomalyDetectionEngine` with generalized multi-metric rolling statistical z-scores, continuous calendar gap-filling, Isolation Forest ensemble, and atomic DB deduplication.
 
 ## Frontier Tickets (Open & Unblocked)
 
-- [002 - Deepen AnomalyDetectionEngine Architecture](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/002-deepen-anomaly-detection-engine.md)
+- [003 - Simplify Multi-Agent Investigation Pipeline](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/003-simplify-investigation-agent-pipeline.md) *(Unblocked! Ready to claim)*
+- [005 - Transactional Test Isolation Seam](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/005-transactional-test-isolation-seam.md) *(Open - Queued from Architecture Review)*
 
 ## Blocked Tickets
 
-- [003 - Simplify Multi-Agent Investigation Pipeline](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/003-simplify-investigation-agent-pipeline.md) (Blocked by 002)
 - [004 - Design Grounded Evaluation & Benchmark Harness](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/004-design-grounded-eval-suite.md) (Blocked by 003)
 
 ## Not yet specified
