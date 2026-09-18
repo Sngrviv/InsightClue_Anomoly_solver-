@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from src.models.dispute_tickets import DisputeSupportTicket
 from src.models.fintech_metrics import DailySpendMetric
-from src.services.embedding_service import generate_embeddings_batch
+from src.services.ticket_vector_store import TicketVectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -227,44 +227,19 @@ class UniversalDatasetAdapter:
         batch_size: int = 50,
     ) -> int:
         """
-        Embeds customer complaint narratives in batches and persists to dispute_support_tickets.
+        Embeds customer complaint narratives in batches and persists to dispute_support_tickets via deep TicketVectorStore seam.
         """
         if not records:
             return 0
 
-        import asyncio
-        inserted_count = 0
-        total = len(records)
-
-        for i in range(0, total, batch_size):
-            batch = records[i : i + batch_size]
-            messages = [r["message"] for r in batch]
-
-            # Generate 768-dim embeddings in batch via worker thread to prevent event-loop block
-            embeddings = await asyncio.to_thread(generate_embeddings_batch, messages)
-
-            for rec, emb in zip(batch, embeddings):
-                ticket = DisputeSupportTicket(
-                    dataset_source=dataset_source,
-                    ticket_created_at=rec["ticket_created_at"],
-                    region=rec["region"],
-                    product_name=rec["product_name"],
-                    customer_tier=rec["customer_tier"],
-                    customer_id=rec["customer_id"],
-                    issue_category=rec["issue_category"],
-                    priority=rec["priority"],
-                    dispute_amount=rec["dispute_amount"],
-                    sentiment_score=rec["sentiment_score"],
-                    subject=rec["subject"][:255],
-                    message=rec["message"],
-                    embedding=emb,
-                )
-                session.add(ticket)
-                inserted_count += 1
-
-            await session.commit()
-            logger.info(f"Embedded and inserted {inserted_count}/{total} dispute tickets into pgvector.")
-
+        vector_store = TicketVectorStore()
+        inserted_count = await vector_store.index_tickets(
+            tickets=records,
+            batch_size=batch_size,
+            dataset_source=dataset_source,
+            session=session,
+        )
+        logger.info(f"Indexed and inserted {inserted_count}/{len(records)} dispute tickets into pgvector.")
         return inserted_count
 
     async def aggregate_to_daily_metrics(

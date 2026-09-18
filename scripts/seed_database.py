@@ -30,7 +30,7 @@ from src.models import (
     DisputeSupportTicket,
     PaymentGatewayLog,
 )
-from src.services.embedding_service import generate_embeddings_batch
+from src.services.ticket_vector_store import TicketVectorStore
 
 # Set random seed for deterministic simulation
 random.seed(42)
@@ -334,40 +334,15 @@ async def seed_all():
             await session.commit()
             print(f"   - Inserted {min(i + batch_size, len(gateway_records)):,}/{len(gateway_records):,} gateway logs.")
 
-    # 3. Generate Vector Embeddings for Support Tickets and Save
-    print("\n⏳ Generating 768-dim Vector Embeddings for Support Tickets...")
-    ticket_objects = []
-    batch_embed_size = 64
-
-    for i in range(0, len(ticket_payloads), batch_embed_size):
-        batch = ticket_payloads[i : i + batch_embed_size]
-        texts = [f"Subject: {item['subject']} | Category: {item['issue_category']} | Message: {item['message']}" for item in batch]
-        embeddings = generate_embeddings_batch(texts)
-
-        for payload, emb in zip(batch, embeddings):
-            ticket_objects.append(
-                DisputeSupportTicket(
-                    ticket_created_at=payload["created_at"],
-                    region=payload["region"],
-                    product_name=payload["product_name"],
-                    customer_tier=payload["customer_tier"],
-                    customer_id=payload["customer_id"],
-                    issue_category=payload["issue_category"],
-                    priority=payload["priority"],
-                    dispute_amount=payload["dispute_amount"],
-                    sentiment_score=payload["sentiment_score"],
-                    subject=payload["subject"],
-                    message=payload["message"],
-                    embedding=emb,
-                )
-            )
-        print(f"   - Generated embeddings for {len(ticket_objects):,}/{len(ticket_payloads):,} tickets...")
-
-    print("\n⏳ Saving DisputeSupportTicket records with pgvector embeddings...")
-    async with AsyncSessionFactory() as session:
-        for i in range(0, len(ticket_objects), 500):
-            session.add_all(ticket_objects[i : i + 500])
-            await session.commit()
+    # 3. Index Dispute Support Tickets with pgvector embeddings
+    print("\n⏳ Indexing DisputeSupportTicket records with 768-dim pgvector embeddings...")
+    vector_store = TicketVectorStore()
+    inserted_tickets = await vector_store.index_tickets(
+        tickets=ticket_payloads,
+        batch_size=64,
+        dataset_source="SYNTHETIC_SIMULATION",
+    )
+    print(f"   - Successfully embedded and inserted {inserted_tickets:,} tickets via TicketVectorStore.")
 
     # 4. Verify Counts and Semantic Search
     print("\n" + "=" * 65)
