@@ -21,8 +21,69 @@ if sys.stdout.encoding != "utf-8":
     except Exception:
         pass
 
+from src.database.session import async_engine
 from src.models.investigations import AnomalyEvent
 from src.services.investigation_service import InvestigationService
+
+GOLDEN_BENCHMARKS = [
+    {
+        "id": "SCN-001",
+        "title": "CFPB Mortgage Disclosure & Escrow Grievance Surge",
+        "anomaly": {
+            "anomaly_id": 101,
+            "detected_at": datetime.now(timezone.utc).isoformat(),
+            "region": "West",
+            "product_name": "Mortgage",
+            "customer_tier": "Retail",
+            "metric_name": "chargeback_dispute_spike",
+            "actual_value": 7.8,
+            "expected_value": 0.4,
+            "deviation_pct": 1850.0,
+            "z_score": 4.1,
+            "severity": "CRITICAL",
+            "dataset_source": "KAGGLE_CFPB",
+        },
+        "target_keywords": ["mortgage", "loan", "escrow", "closing", "dispute", "interest"],
+    },
+    {
+        "id": "SCN-002",
+        "title": "Credit Card Billing Dispute & Unauthorized Surcharge Spike",
+        "anomaly": {
+            "anomaly_id": 102,
+            "detected_at": datetime.now(timezone.utc).isoformat(),
+            "region": "South",
+            "product_name": "Credit Card",
+            "customer_tier": "Enterprise",
+            "metric_name": "chargeback_dispute_spike",
+            "actual_value": 6.2,
+            "expected_value": 0.8,
+            "deviation_pct": 675.0,
+            "z_score": 3.8,
+            "severity": "CRITICAL",
+            "dataset_source": "KAGGLE_CFPB",
+        },
+        "target_keywords": ["card", "fee", "unauthorized", "charge", "dispute", "billing"],
+    },
+    {
+        "id": "SCN-003",
+        "title": "Bank Account Overdraft & Processing Latency Friction",
+        "anomaly": {
+            "anomaly_id": 103,
+            "detected_at": datetime.now(timezone.utc).isoformat(),
+            "region": "East",
+            "product_name": "Bank account or service",
+            "customer_tier": "Retail",
+            "metric_name": "avg_latency_surge",
+            "actual_value": 1850.0,
+            "expected_value": 140.0,
+            "deviation_pct": 1221.0,
+            "z_score": 4.8,
+            "severity": "CRITICAL",
+            "dataset_source": "KAGGLE_CFPB",
+        },
+        "target_keywords": ["account", "deposit", "overdraft", "transfer", "fee", "delay"],
+    },
+]
 
 
 async def run_evaluation_suite():
