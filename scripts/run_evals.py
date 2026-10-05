@@ -21,103 +21,44 @@ if sys.stdout.encoding != "utf-8":
     except Exception:
         pass
 
-from src.agents.investigation_graph import InvestigationGraphBuilder
-from src.agents.state import InvestigationState
-from src.database.session import AsyncSessionFactory, async_engine
-
-
-GOLDEN_BENCHMARKS = [
-    {
-        "id": "SCN-001",
-        "title": "CFPB Mortgage Disclosure & Escrow Grievance Surge",
-        "anomaly": {
-            "anomaly_id": 101,
-            "detected_at": datetime.now(timezone.utc).isoformat(),
-            "region": "West",
-            "product_name": "Mortgage",
-            "customer_tier": "Retail",
-            "metric_name": "chargeback_dispute_spike",
-            "actual_value": 7.8,
-            "expected_value": 0.4,
-            "deviation_pct": 1850.0,
-            "z_score": 4.1,
-            "severity": "CRITICAL",
-            "dataset_source": "KAGGLE_CFPB",
-        },
-        "target_keywords": ["mortgage", "loan", "escrow", "closing", "dispute", "interest"],
-    },
-    {
-        "id": "SCN-002",
-        "title": "Credit Card Billing Dispute & Unauthorized Surcharge Spike",
-        "anomaly": {
-            "anomaly_id": 102,
-            "detected_at": datetime.now(timezone.utc).isoformat(),
-            "region": "South",
-            "product_name": "Credit Card",
-            "customer_tier": "Enterprise",
-            "metric_name": "chargeback_dispute_spike",
-            "actual_value": 6.2,
-            "expected_value": 0.8,
-            "deviation_pct": 675.0,
-            "z_score": 3.8,
-            "severity": "CRITICAL",
-            "dataset_source": "KAGGLE_CFPB",
-        },
-        "target_keywords": ["card", "fee", "unauthorized", "charge", "dispute", "billing"],
-    },
-    {
-        "id": "SCN-003",
-        "title": "Bank Account Overdraft & Processing Latency Friction",
-        "anomaly": {
-            "anomaly_id": 103,
-            "detected_at": datetime.now(timezone.utc).isoformat(),
-            "region": "East",
-            "product_name": "Bank account or service",
-            "customer_tier": "Retail",
-            "metric_name": "avg_latency_surge",
-            "actual_value": 1850.0,
-            "expected_value": 140.0,
-            "deviation_pct": 1221.0,
-            "z_score": 4.8,
-            "severity": "CRITICAL",
-            "dataset_source": "KAGGLE_CFPB",
-        },
-        "target_keywords": ["account", "deposit", "overdraft", "transfer", "fee", "delay"],
-    },
-]
+from src.models.investigations import AnomalyEvent
+from src.services.investigation_service import InvestigationService
 
 
 async def run_evaluation_suite():
-    print("=" * 70)
-    print("🏆 InsightClue AI Engineering Evaluation & Benchmark Harness")
-    print("=" * 70)
-    print(f"Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    print(f"Total Benchmark Scenarios: {len(GOLDEN_BENCHMARKS)}\n")
+    print("=" * 70, flush=True)
+    print("🏆 InsightClue AI Engineering Evaluation & Benchmark Harness", flush=True)
+    print("=" * 70, flush=True)
+    print(f"Timestamp: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}", flush=True)
+    print(f"Total Benchmark Scenarios: {len(GOLDEN_BENCHMARKS)}\n", flush=True)
 
-    builder = InvestigationGraphBuilder()
-    graph = builder.build_graph()
-
+    service = InvestigationService()
     results = []
 
     for scenario in GOLDEN_BENCHMARKS:
-        print(f"▶️  Running [{scenario['id']}] {scenario['title']}...")
+        print(f"▶️  Running [{scenario['id']}] {scenario['title']}...", flush=True)
         start_t = time.perf_counter()
 
-        initial_state: InvestigationState = {
-            **scenario["anomaly"],
-            "active_hypothesis": f"Investigating {scenario['anomaly']['metric_name']} for {scenario['anomaly']['product_name']}.",
-            "iteration_count": 0,
-            "sql_history": [],
-            "ticket_citations": [],
-            "reasoning_trace": [],
-            "root_cause_summary": "",
-            "confidence_score": 0.0,
-            "mitigation_steps": "",
-            "is_complete": False,
-        }
+        dummy_anomaly = AnomalyEvent(
+            id=scenario["anomaly"]["anomaly_id"],
+            detected_at=datetime.now(timezone.utc),
+            region=scenario["anomaly"]["region"],
+            product_name=scenario["anomaly"]["product_name"],
+            customer_tier=scenario["anomaly"]["customer_tier"],
+            metric_name=scenario["anomaly"]["metric_name"],
+            actual_value=scenario["anomaly"]["actual_value"],
+            expected_value=scenario["anomaly"]["expected_value"],
+            deviation_pct=scenario["anomaly"]["deviation_pct"],
+            z_score=scenario["anomaly"]["z_score"],
+            severity=scenario["anomaly"]["severity"],
+            status="OPEN",
+        )
+        setattr(dummy_anomaly, "dataset_source", scenario["anomaly"]["dataset_source"])
+
+        initial_state = service.create_initial_state(dummy_anomaly, trigger_source="BENCHMARK")
 
         try:
-            final_state = await graph.ainvoke(initial_state)
+            final_state = await service.graph.ainvoke(initial_state)
             elapsed = time.perf_counter() - start_t
 
             # 1. Evaluate SQL execution success

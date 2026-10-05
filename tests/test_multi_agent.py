@@ -8,8 +8,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.agents.investigation_graph import InvestigationGraphBuilder
 from src.agents.state import InvestigationState
-from src.agents.tools.rag_tool import DisputeTicketRAGTool
 from src.agents.tools.sql_sandbox import SafeSQLSandbox, SQLSecurityViolation
+from src.services.ticket_vector_store import TicketVectorStore
 
 
 @pytest.mark.asyncio
@@ -44,9 +44,9 @@ async def test_sql_sandbox_executes_safe_select(seeded_db_session: AsyncSession)
 
 
 @pytest.mark.asyncio
-async def test_rag_tool_returns_citations(seeded_db_session: AsyncSession) -> None:
-    rag_tool = DisputeTicketRAGTool()
-    citations = await rag_tool.search_tickets(
+async def test_vector_store_returns_citations(seeded_db_session: AsyncSession) -> None:
+    vector_store = TicketVectorStore()
+    citations = await vector_store.search_citations(
         query="Corporate Card OTP timeout in South region",
         region="South",
         product_name="Corporate Credit Card",

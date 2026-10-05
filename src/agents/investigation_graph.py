@@ -10,8 +10,8 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 from src.agents.llm_client import get_llm_client
 from src.agents.state import AgentThought, InvestigationState, SQLQueryResult
-from src.agents.tools.rag_tool import DisputeTicketRAGTool
 from src.agents.tools.sql_sandbox import SafeSQLSandbox, SQLSecurityViolation
+from src.services.ticket_vector_store import TicketVectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +24,10 @@ class InvestigationGraphBuilder:
     def __init__(
         self,
         sql_sandbox: SafeSQLSandbox | None = None,
-        rag_tool: DisputeTicketRAGTool | None = None,
+        vector_store: TicketVectorStore | None = None,
     ) -> None:
         self.sql_sandbox = sql_sandbox or SafeSQLSandbox()
-        self.rag_tool = rag_tool or DisputeTicketRAGTool()
+        self.vector_store = vector_store or TicketVectorStore()
         self.llm = get_llm_client()
 
     async def supervisor_node(self, state: InvestigationState) -> dict[str, Any]:
@@ -187,10 +187,11 @@ class InvestigationGraphBuilder:
         resp = self.llm.generate_json(user_prompt, system_prompt=system_prompt)
         query = resp.get("semantic_query", f"{state.get('product_name')} {state.get('region')} {state.get('metric_name')}")
 
-        citations = await self.rag_tool.search_tickets(
+        citations = await self.vector_store.search_citations(
             query=query,
             region=state.get("region"),
             product_name=state.get("product_name"),
+            customer_tier=state.get("customer_tier"),
             dataset_source=state.get("dataset_source"),
             limit=5,
         )

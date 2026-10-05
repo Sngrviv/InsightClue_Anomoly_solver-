@@ -285,3 +285,48 @@ class TicketVectorStore:
             TicketMatch(ticket=ticket, similarity_score=float(score))
             for ticket, score in rows
         ]
+
+    async def search_citations(
+        self,
+        query: str,
+        region: str | None = None,
+        product_name: str | None = None,
+        customer_tier: str | None = None,
+        dataset_source: str | None = None,
+        limit: int = 5,
+        session: AsyncSession | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        High-leverage seam for AI agents: executes semantic vector search and formats results
+        into structured citations with automatic broad fallback if partitioned filters return empty.
+        """
+        matches = await self.search(
+            query=query,
+            region=region,
+            product_name=product_name,
+            customer_tier=customer_tier,
+            dataset_source=dataset_source,
+            min_similarity=0.40,
+            limit=limit,
+            session=session,
+        )
+
+        if not matches:
+            matches = await self.search(
+                query=query,
+                dataset_source=dataset_source,
+                min_similarity=0.35,
+                limit=limit,
+                session=session,
+            )
+
+        return [
+            {
+                "ticket_id": m.ticket.id,
+                "customer_id": m.ticket.customer_id,
+                "issue_category": m.ticket.issue_category,
+                "complaint_text": f"{m.ticket.subject}: {m.ticket.message}",
+                "similarity_score": round(float(m.similarity_score), 4),
+            }
+            for m in matches
+        ]

@@ -8,7 +8,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.agents.investigation_graph import InvestigationGraphBuilder
 from src.agents.state import InvestigationState
-from src.agents.tools.rag_tool import DisputeTicketRAGTool
 from src.agents.tools.sql_sandbox import SafeSQLSandbox
 from src.services.ticket_vector_store import TicketVectorStore
 
