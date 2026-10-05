@@ -161,8 +161,9 @@ class TicketVectorStore:
     ) -> int:
         inserted = 0
         total = len(tickets)
+        total_batches = (total + batch_size - 1) // batch_size
 
-        for i in range(0, total, batch_size):
+        for batch_idx, i in enumerate(range(0, total, batch_size), start=1):
             chunk = tickets[i : i + batch_size]
             messages: list[str] = []
             ticket_entities: list[DisputeSupportTicket] = []
@@ -170,11 +171,12 @@ class TicketVectorStore:
             for item in chunk:
                 if isinstance(item, dict):
                     msg = str(item.get("message", item.get("subject", ""))).strip()
-                    messages.append(msg)
                 else:
                     msg = str(item.message or item.subject or "").strip()
-                    messages.append(msg)
+                # Truncate to first 1024 characters for FastEmbed ONNX token window efficiency
+                messages.append(msg[:1024])
 
+            print(f"   - [Batch {batch_idx}/{total_batches}] Generating 768-dim embeddings for {len(chunk)} tickets...")
             # Compute embeddings in worker thread to prevent event-loop block
             embeddings = await asyncio.to_thread(_compute_embeddings_batch, messages, False)
 
@@ -203,7 +205,7 @@ class TicketVectorStore:
                 inserted += 1
 
             await session.flush()
-            print(f"   - Generated embeddings and indexed {inserted:,}/{total:,} tickets into pgvector...")
+            print(f"   - ✅ [Batch {batch_idx}/{total_batches}] Indexed {inserted:,}/{total:,} tickets into pgvector.")
 
         return inserted
 

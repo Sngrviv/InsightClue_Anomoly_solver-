@@ -308,7 +308,9 @@ class UniversalDatasetAdapter:
         start_time = datetime.now(timezone.utc)
 
         records = self.load_and_normalize_records(source_path, mapping, max_records=max_records)
-        tickets_count = await self.ingest_dispute_tickets(records, session, dataset_source=dataset_source)
+        print(f"   - 🧠 Generating embeddings and indexing {len(records):,} tickets into pgvector...")
+        tickets_count = await self.ingest_dispute_tickets(records, session, dataset_source=dataset_source, batch_size=25)
+        print(f"   - 📊 Aggregating {len(records):,} tickets into daily time-series metrics...")
         metrics_count = await self.aggregate_to_daily_metrics(records, session, dataset_source=dataset_source)
 
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
