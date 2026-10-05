@@ -34,24 +34,24 @@ async def test_sql_sandbox_blocks_destructive_queries() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sql_sandbox_executes_safe_select(db_session: AsyncSession) -> None:
+async def test_sql_sandbox_executes_safe_select(seeded_db_session: AsyncSession) -> None:
     sandbox = SafeSQLSandbox()
     query = "SELECT count(*) as total_logs FROM payment_gateway_logs"
-    results = await sandbox.execute_query(query, session=db_session)
+    results = await sandbox.execute_query(query, session=seeded_db_session)
     assert len(results) == 1
     assert "total_logs" in results[0]
     assert results[0]["total_logs"] > 0
 
 
 @pytest.mark.asyncio
-async def test_rag_tool_returns_citations(db_session: AsyncSession) -> None:
+async def test_rag_tool_returns_citations(seeded_db_session: AsyncSession) -> None:
     rag_tool = DisputeTicketRAGTool()
     citations = await rag_tool.search_tickets(
         query="Corporate Card OTP timeout in South region",
         region="South",
         product_name="Corporate Credit Card",
         limit=3,
-        session=db_session,
+        session=seeded_db_session,
     )
     assert isinstance(citations, list)
     assert len(citations) > 0
@@ -62,7 +62,7 @@ async def test_rag_tool_returns_citations(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_multi_agent_investigation_state_transition(db_session: AsyncSession) -> None:
+async def test_multi_agent_investigation_state_transition(seeded_db_session: AsyncSession) -> None:
     graph_builder = InvestigationGraphBuilder()
     workflow = graph_builder.build_graph()
 

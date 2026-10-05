@@ -77,10 +77,10 @@ def test_anomaly_detection_calendar_gap_filling():
 
 
 @pytest.mark.asyncio
-async def test_anomaly_detector_scan_and_persist_db(db_session: AsyncSession):
+async def test_anomaly_detector_scan_and_persist_db(seeded_db_session: AsyncSession):
     engine = AnomalyDetectionEngine(rolling_window_days=14, z_score_threshold=2.5)
 
-    events_first_pass = await engine.scan_and_persist(session=db_session)
+    events_first_pass = await engine.scan_and_persist(session=seeded_db_session)
     assert len(events_first_pass) > 0
 
     # Planted Anomaly in South region is discovered
@@ -92,5 +92,5 @@ async def test_anomaly_detector_scan_and_persist_db(db_session: AsyncSession):
     assert any(e.severity == "CRITICAL" for e in south_events)
 
     # Second pass: Assert atomic deduplication (no new duplicates inserted)
-    events_second_pass = await engine.scan_and_persist(session=db_session)
+    events_second_pass = await engine.scan_and_persist(session=seeded_db_session)
     assert len(events_second_pass) == len(events_first_pass)

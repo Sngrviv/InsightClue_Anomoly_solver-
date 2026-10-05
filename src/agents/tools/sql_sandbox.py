@@ -1,10 +1,11 @@
 """
 Safe Read-Only SQL Sandbox for AI Agents.
 Enforces AST/Regex validation, forbids write/DDL operations, injects LIMIT pagination,
-and executes queries within read-only transactions with timeouts.
+introspects active database schemas, and executes queries within read-only transactions with timeouts.
 """
 
 import asyncio
+from functools import lru_cache
 import re
 from typing import Any
 from sqlalchemy import text
@@ -20,6 +21,7 @@ class SQLSecurityViolation(Exception):
 class SafeSQLSandbox:
     """
     Secure execution boundary for autonomous LLM SQL queries.
+    Provides dynamic schema introspection and read-only query execution.
     """
 
     FORBIDDEN_KEYWORDS = [
@@ -41,6 +43,55 @@ class SafeSQLSandbox:
     def __init__(self, max_rows: int = 50, timeout_seconds: float = 5.0) -> None:
         self.max_rows = max_rows
         self.timeout_seconds = timeout_seconds
+        self._cached_schema: str | None = None
+
+    async def get_schema_summary(self, session: AsyncSession | None = None) -> str:
+        """
+        Dynamically introspects PostgreSQL table schemas and returns a formatted description for LLM agents.
+        """
+        if self._cached_schema:
+            return self._cached_schema
+
+        query = text("""
+            SELECT table_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name IN ('daily_spend_metrics', 'dispute_support_tickets', 'payment_gateway_logs', 'anomaly_events')
+            ORDER BY table_name, ordinal_position;
+        """)
+
+        async def _fetch(sess: AsyncSession) -> str:
+            res = await sess.execute(query)
+            rows = res.all()
+            if not rows:
+                # Fallback schema summary if DB is fresh
+                return (
+                    "TABLES:\n"
+                    "- daily_spend_metrics (dataset_source, metric_date, region, product_name, customer_tier, daily_spend_amount, transaction_count, success_rate_pct, avg_latency_ms, chargeback_rate_pct)\n"
+                    "- dispute_support_tickets (dataset_source, ticket_created_at, region, product_name, customer_tier, issue_category, priority, subject, message)\n"
+                    "- anomaly_events (dataset_source, detected_at, region, product_name, customer_tier, metric_name, actual_value, expected_value, severity, status)"
+                )
+            
+            tables: dict[str, list[str]] = {}
+            for t_name, c_name, d_type in rows:
+                if t_name not in tables:
+                    tables[t_name] = []
+                tables[t_name].append(f"{c_name} {d_type}")
+
+            summary_lines = ["ACTIVE DATABASE SCHEMAS:"]
+            for t_name, cols in tables.items():
+                summary_lines.append(f"- {t_name} ({', '.join(cols)})")
+            
+            return "\n".join(summary_lines)
+
+        if session is not None:
+            schema_str = await _fetch(session)
+        else:
+            async with AsyncSessionFactory() as fresh_session:
+                schema_str = await _fetch(fresh_session)
+
+        self._cached_schema = schema_str
+        return schema_str
 
     def validate_query(self, query: str) -> str:
         """
@@ -99,7 +150,6 @@ class SafeSQLSandbox:
         validated_sql = self.validate_query(query)
 
         async def _run(sess: AsyncSession) -> list[dict[str, Any]]:
-            # Enforce read-only transaction state
             await sess.execute(text("SET TRANSACTION READ ONLY"))
             result = await sess.execute(text(validated_sql))
             rows = result.mappings().all()

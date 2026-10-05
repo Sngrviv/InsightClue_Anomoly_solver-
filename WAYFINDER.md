@@ -16,15 +16,16 @@ Eliminate all shallow boilerplate, layer bloat, and AI slob from InsightClue by 
 
 - [001 - Deepen TicketVectorStore Interface & Encapsulation](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/001-deepen-ticket-vector-store.md): Unified embedding generation, LRU query caching, and pgvector batch indexing inside `TicketVectorStore` behind `search()` and `index_tickets()` methods.
 - [002 - Deepen AnomalyDetectionEngine Architecture](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/002-deepen-anomaly-detection-engine.md): Streamlined `AnomalyDetectionEngine` with generalized multi-metric rolling statistical z-scores, continuous calendar gap-filling, Isolation Forest ensemble, and atomic DB deduplication.
+- [003 - Simplify Multi-Agent Investigation Pipeline](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/003-simplify-investigation-agent-pipeline.md): Central Supervisor blackboard topology in LangGraph with direct `SafeSQLSandbox` schema-aware querying, `TicketVectorStore` RAG retrieval, strict Pydantic report validation, and SSE observability.
+- [005 - Transactional Test Isolation Seam](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/005-transactional-test-isolation-seam.md): Implemented nested savepoint rollback fixtures and deterministic test data injection in `tests/conftest.py`, guaranteeing zero test data pollution in live PostgreSQL tables.
 
 ## Frontier Tickets (Open & Unblocked)
 
-- [003 - Simplify Multi-Agent Investigation Pipeline](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/003-simplify-investigation-agent-pipeline.md) *(Unblocked! Ready to claim)*
-- [005 - Transactional Test Isolation Seam](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/005-transactional-test-isolation-seam.md) *(Open - Queued from Architecture Review)*
+- [004 - Design Grounded Evaluation & Benchmark Harness](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/004-design-grounded-eval-suite.md) *(Unblocked! Ready to claim)*
 
 ## Blocked Tickets
 
-- [004 - Design Grounded Evaluation & Benchmark Harness](file:///d:/Projects/Self_learn/Major%20project/docs/wayfinder/004-design-grounded-eval-suite.md) (Blocked by 003)
+None (All primary roadmap tickets unblocked).
 
 ## Not yet specified
 

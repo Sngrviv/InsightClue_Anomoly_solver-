@@ -126,77 +126,79 @@ async def trigger_investigation(
 
 
 @router.get("/stream/{anomaly_id}")
-async def stream_investigation_events(anomaly_id: int) -> StreamingResponse:
+async def stream_investigation_events(
+    anomaly_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
     """
     Server-Sent Events (SSE) endpoint streaming live agent thought traces and findings.
     """
     async def event_generator() -> AsyncGenerator[str, None]:
-        async with AsyncSessionFactory() as session:
-            stmt = select(AnomalyEvent).where(AnomalyEvent.id == anomaly_id)
-            result = await session.execute(stmt)
-            anomaly = result.scalar_one_or_none()
+        stmt = select(AnomalyEvent).where(AnomalyEvent.id == anomaly_id)
+        result = await db.execute(stmt)
+        anomaly = result.scalar_one_or_none()
 
-            if not anomaly:
-                yield f"event: error\ndata: {json.dumps({'error': f'Anomaly #{anomaly_id} not found'})}\n\n"
-                return
+        if not anomaly:
+            yield f"event: error\ndata: {json.dumps({'error': f'Anomaly #{anomaly_id} not found'})}\n\n"
+            return
 
-            # Yield Anomaly Info
-            yield f"event: anomaly_info\ndata: {json.dumps({'id': anomaly.id, 'metric': anomaly.metric_name, 'region': anomaly.region, 'product': anomaly.product_name, 'severity': anomaly.severity, 'actual': anomaly.actual_value, 'expected': anomaly.expected_value, 'dataset_source': getattr(anomaly, 'dataset_source', 'FINTECH_90D')})}\n\n"
-            await asyncio.sleep(0.1)
+        # Yield Anomaly Info
+        yield f"event: anomaly_info\ndata: {json.dumps({'id': anomaly.id, 'metric': anomaly.metric_name, 'region': anomaly.region, 'product': anomaly.product_name, 'severity': anomaly.severity, 'actual': anomaly.actual_value, 'expected': anomaly.expected_value, 'dataset_source': getattr(anomaly, 'dataset_source', 'FINTECH_90D')})}\n\n"
+        await asyncio.sleep(0.1)
 
-            # Build initial state
-            initial_state: InvestigationState = {
-                "anomaly_id": anomaly.id,
-                "detected_at": anomaly.detected_at.isoformat(),
-                "region": anomaly.region,
-                "product_name": anomaly.product_name,
-                "customer_tier": anomaly.customer_tier,
-                "metric_name": anomaly.metric_name,
-                "actual_value": anomaly.actual_value,
-                "expected_value": anomaly.expected_value,
-                "deviation_pct": anomaly.deviation_pct,
-                "z_score": anomaly.z_score,
-                "severity": anomaly.severity,
-                "trigger_source": "SSE_STREAM",
-                "dataset_source": getattr(anomaly, "dataset_source", "FINTECH_90D"),
-                "active_hypothesis": f"Investigating {anomaly.metric_name} in {anomaly.region}.",
-                "iteration_count": 0,
-                "sql_history": [],
-                "ticket_citations": [],
-                "reasoning_trace": [],
-            }
+        # Build initial state
+        initial_state: InvestigationState = {
+            "anomaly_id": anomaly.id,
+            "detected_at": anomaly.detected_at.isoformat(),
+            "region": anomaly.region,
+            "product_name": anomaly.product_name,
+            "customer_tier": anomaly.customer_tier,
+            "metric_name": anomaly.metric_name,
+            "actual_value": anomaly.actual_value,
+            "expected_value": anomaly.expected_value,
+            "deviation_pct": anomaly.deviation_pct,
+            "z_score": anomaly.z_score,
+            "severity": anomaly.severity,
+            "trigger_source": "SSE_STREAM",
+            "dataset_source": getattr(anomaly, "dataset_source", "FINTECH_90D"),
+            "active_hypothesis": f"Investigating {anomaly.metric_name} in {anomaly.region}.",
+            "iteration_count": 0,
+            "sql_history": [],
+            "ticket_citations": [],
+            "reasoning_trace": [],
+        }
 
-            graph_builder = InvestigationGraphBuilder()
-            workflow = graph_builder.build_graph()
+        graph_builder = InvestigationGraphBuilder()
+        workflow = graph_builder.build_graph()
 
-            # Stream steps through workflow.astream
-            async for chunk in workflow.astream(initial_state):
-                for node_name, node_state in chunk.items():
-                    # Stream thoughts if any
-                    for thought in node_state.get("reasoning_trace", []):
-                        yield f"event: agent_thought\ndata: {json.dumps(thought)}\n\n"
-                        await asyncio.sleep(0.05)
+        # Stream steps through workflow.astream
+        async for chunk in workflow.astream(initial_state):
+            for node_name, node_state in chunk.items():
+                # Stream thoughts if any
+                for thought in node_state.get("reasoning_trace", []):
+                    yield f"event: agent_thought\ndata: {json.dumps(thought)}\n\n"
+                    await asyncio.sleep(0.05)
 
-                    # Stream SQL evidence
-                    for sql in node_state.get("sql_history", []):
-                        yield f"event: sql_evidence\ndata: {json.dumps(sql)}\n\n"
-                        await asyncio.sleep(0.05)
+                # Stream SQL evidence
+                for sql in node_state.get("sql_history", []):
+                    yield f"event: sql_evidence\ndata: {json.dumps(sql)}\n\n"
+                    await asyncio.sleep(0.05)
 
-                    # Stream Ticket citations
-                    for ticket in node_state.get("ticket_citations", []):
-                        yield f"event: ticket_evidence\ndata: {json.dumps(ticket)}\n\n"
-                        await asyncio.sleep(0.05)
+                # Stream Ticket citations
+                for ticket in node_state.get("ticket_citations", []):
+                    yield f"event: ticket_evidence\ndata: {json.dumps(ticket)}\n\n"
+                    await asyncio.sleep(0.05)
 
-                    # Stream final RCA report
-                    if node_name == "synthesis_agent":
-                        rca_payload = {
-                            "root_cause_summary": node_state.get("root_cause_summary"),
-                            "confidence_score": node_state.get("confidence_score"),
-                            "mitigation_steps": node_state.get("mitigation_steps"),
-                        }
-                        yield f"event: rca_report\ndata: {json.dumps(rca_payload)}\n\n"
+                # Stream final RCA report
+                if node_name == "synthesis_agent":
+                    rca_payload = {
+                        "root_cause_summary": node_state.get("root_cause_summary"),
+                        "confidence_score": node_state.get("confidence_score"),
+                        "mitigation_steps": node_state.get("mitigation_steps"),
+                    }
+                    yield f"event: rca_report\ndata: {json.dumps(rca_payload)}\n\n"
 
-            yield f"event: complete\ndata: {json.dumps({'status': 'DONE', 'anomaly_id': anomaly_id})}\n\n"
+        yield f"event: complete\ndata: {json.dumps({'status': 'DONE', 'anomaly_id': anomaly_id})}\n\n"
 
     return StreamingResponse(
         event_generator(),

@@ -4,47 +4,7 @@ Verifies health checks, KPI metrics overview, anomaly querying, and real-time SS
 """
 
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from src.api.main import app
-from src.config.settings import get_settings
-from src.database.session import get_db
-
-settings = get_settings()
-
-
-@pytest_asyncio.fixture
-async def api_client():
-    """Provides an async HTTP client with fresh connection pooling per test."""
-    test_engine = create_async_engine(
-        settings.async_database_url,
-        echo=False,
-        pool_pre_ping=True,
-    )
-    test_sessionmaker = async_sessionmaker(
-        bind=test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
-    async def override_get_db():
-        async with test_sessionmaker() as session:
-            try:
-                yield session
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield client
-
-    app.dependency_overrides.clear()
-    await test_engine.dispose()
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
@@ -167,7 +127,10 @@ async def test_sse_investigation_stream_endpoint(api_client: AsyncClient) -> Non
         events_received = []
         async for line in response.aiter_lines():
             if line.startswith("event:"):
-                events_received.append(line.replace("event:", "").strip())
+                ev = line.replace("event:", "").strip()
+                events_received.append(ev)
+                if ev == "complete":
+                    break
 
         assert len(events_received) > 0
         assert "anomaly_info" in events_received

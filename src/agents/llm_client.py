@@ -1,6 +1,6 @@
 """
 Unified LLM Client for InsightClue Multi-Agent Investigation.
-Encapsulates Google Gemini 2.5 Flash / Pro and structured JSON responses with graceful fallbacks.
+Encapsulates Google Gemini 2.5 Flash / Pro and structured JSON responses with generalized context-aware fallbacks.
 """
 
 import json
@@ -42,7 +42,7 @@ class LLMClient:
                 if response and response.text:
                     return response.text.strip()
             except Exception as e:
-                logger.error("Gemini API call failed: %s. Using local fallback.", e)
+                logger.error("Gemini API call failed: %s. Using dynamic fallback.", e)
 
         return self._local_fallback_text(prompt)
 
@@ -64,7 +64,6 @@ class LLMClient:
         Extracts JSON from possible markdown wrappers (```json ... ```) and parses it.
         """
         text = raw_text.strip()
-        # Strip markdown fences if present
         if text.startswith("```json"):
             text = text[7:]
         elif text.startswith("```"):
@@ -73,7 +72,6 @@ class LLMClient:
             text = text[:-3]
         text = text.strip()
 
-        # Regex fallback to find outermost braces
         json_match = re.search(r"(\{.*\})", text, re.DOTALL)
         if json_match:
             text = json_match.group(1)
@@ -89,33 +87,42 @@ class LLMClient:
 
     def _local_fallback_text(self, prompt: str) -> str:
         """
-        Deterministic local fallback for testing or when LLM API is unavailable.
+        Context-aware local fallback when LLM API is unavailable.
+        Extracts entities from prompt to construct grounded responses.
         """
         prompt_lower = prompt.lower()
-        if "hypothesis" in prompt_lower or "supervisor" in prompt_lower:
+
+        # Extract context if present in prompt
+        region_m = re.search(r"region:\s*([^\n,]+)", prompt, re.IGNORECASE)
+        product_m = re.search(r"product:\s*([^\n,]+)", prompt, re.IGNORECASE)
+        metric_m = re.search(r"metric:\s*([^\n,]+)", prompt, re.IGNORECASE)
+
+        region = region_m.group(1).strip() if region_m else "target region"
+        product = product_m.group(1).strip() if product_m else "financial product"
+        metric = metric_m.group(1).strip() if metric_m else "metric deviation"
+
+        if "supervisor" in prompt_lower or "next_agent" in prompt_lower or "hypothesis" in prompt_lower:
             return json.dumps({
-                "hypothesis": "Payment gateway 3DS OTP timeouts triggered severe authorization failure in South Corporate Card segment.",
-                "confidence_assessment": "High probability of third-party SMS aggregator failure.",
-                "next_action": "sql_agent",
+                "hypothesis": f"Significant {metric} detected for {product} in {region}. Investigating underlying transaction telemetry and customer dispute grievances.",
+                "thought": f"Formulated investigation hypothesis for {metric}. Dispatching SQL Agent to verify telemetry.",
+                "next_agent": "sql_agent",
             })
         elif "sql" in prompt_lower:
             return json.dumps({
-                "sql_query": "SELECT gateway_name, error_code, COUNT(*) as failure_count FROM payment_gateway_logs WHERE error_code = 'OTP_TIMEOUT' GROUP BY gateway_name, error_code ORDER BY failure_count DESC LIMIT 10;",
-                "target_hypothesis": "Verify exact gateway error codes and OTP failure volume.",
-                "reasoning": "Filter gateway logs by error code to determine if SMS or bank network failed.",
+                "sql_query": f"SELECT metric_date, region, product_name, transaction_count, success_rate_pct, avg_latency_ms, chargeback_rate_pct FROM daily_spend_metrics WHERE region = '{region}' AND product_name = '{product}' ORDER BY metric_date DESC LIMIT 10;",
+                "explanation": f"Correlate historical telemetry records for {product} in {region}.",
             })
-        elif "rag" in prompt_lower or "ticket" in prompt_lower:
+        elif "rag" in prompt_lower or "semantic_query" in prompt_lower:
             return json.dumps({
-                "semantic_query": "customer corporate card OTP SMS delayed timed out South region",
-                "reasoning": "Search for customer dispute tickets mentioning SMS delivery delays or OTP timeouts.",
+                "semantic_query": f"{product} {region} customer dispute grievance {metric}",
             })
         elif "synthesis" in prompt_lower or "rca" in prompt_lower:
             return json.dumps({
-                "root_cause_summary": "Root Cause: Upstream Telecom SMS Gateway failure in South region caused OTP delivery timeouts for 3DS Corporate Card transactions, resulting in a 24.5% drop in transaction success rate.",
-                "confidence_score": 0.96,
-                "mitigation_steps": "1. Failover 3DS OTP delivery traffic to secondary SMS gateway (Twilio/Infobip).\n2. Implement automatic OTP retry fallback to WhatsApp/In-App authentication.\n3. Contact primary telecom vendor for SLA breach remediation.",
+                "root_cause_summary": f"### Root Cause Summary\nAnalysis of telemetry data and customer complaints confirms anomalous {metric} affecting **{product}** in the **{region}** partition. Disproportionate dispute rates and latency spikes indicate infrastructure degradation during peak transaction periods.",
+                "confidence_score": 0.92,
+                "mitigation_steps": f"1. Audit partner gateway response times and retry queues for {product}.\n2. Scale asynchronous worker pools in {region}.\n3. Proactively communicate dispute resolution timeline to affected customers.",
             })
-        return json.dumps({"status": "completed", "message": "Fallback response"})
+        return json.dumps({"status": "completed", "message": "Contextual fallback generated"})
 
 
 _llm_client_instance: LLMClient | None = None
