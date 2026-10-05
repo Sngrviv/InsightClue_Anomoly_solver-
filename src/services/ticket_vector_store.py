@@ -249,13 +249,13 @@ class TicketVectorStore:
             stmt = stmt.where(DisputeSupportTicket.region == region)
 
         if product_name:
-            stmt = stmt.where(DisputeSupportTicket.product_name == product_name)
+            stmt = stmt.where(DisputeSupportTicket.product_name.ilike(f"%{product_name.strip()}%"))
 
         if customer_tier:
-            stmt = stmt.where(DisputeSupportTicket.customer_tier == customer_tier)
+            stmt = stmt.where(DisputeSupportTicket.customer_tier.ilike(f"%{customer_tier.strip()}%"))
 
         if issue_category:
-            stmt = stmt.where(DisputeSupportTicket.issue_category == issue_category)
+            stmt = stmt.where(DisputeSupportTicket.issue_category.ilike(f"%{issue_category.strip()}%"))
 
         if start_date:
             stmt = stmt.where(DisputeSupportTicket.ticket_created_at >= start_date)

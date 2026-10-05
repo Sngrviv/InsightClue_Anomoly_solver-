@@ -1,6 +1,7 @@
 """
 Unified LLM Client for InsightClue Multi-Agent Investigation.
-Encapsulates Google Gemini 2.5 Flash / Pro and structured JSON responses with generalized context-aware fallbacks.
+100% API-driven execution via Google GenAI SDK with multi-model resilience.
+Zero synthetic mock strings or hardcoded fallbacks.
 """
 
 import json
@@ -12,10 +13,18 @@ from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Fallback candidate cascade for live model availability
+CANDIDATE_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
+]
+
 
 class LLMClient:
     """
-    Unified LLM Client providing structured text and JSON generation.
+    Unified, 100% API-driven LLM Client providing structured text and JSON generation.
     """
 
     def __init__(self) -> None:
@@ -25,30 +34,50 @@ class LLMClient:
             try:
                 self._gemini_client = genai.Client(api_key=self.settings.GEMINI_API_KEY)
             except Exception as e:
-                logger.warning("Failed to initialize Google GenAI client: %s", e)
+                logger.error("Failed to initialize Google GenAI client: %s", e)
+                raise RuntimeError(f"Could not initialize Google GenAI client with provided API key: {e}")
+        else:
+            logger.error("GEMINI_API_KEY is not configured in environment or .env file.")
 
     def generate_text(self, prompt: str, system_prompt: str | None = None) -> str:
         """
-        Generates text response from LLM.
+        Generates text response directly from Google GenAI API with model cascading.
+        Raises RuntimeError if the API cannot be reached.
         """
+        if not self._gemini_client:
+            raise RuntimeError(
+                "GEMINI_API_KEY is required for LLM reasoning. Please set GEMINI_API_KEY in your .env file."
+            )
+
         full_prompt = f"System: {system_prompt}\n\nUser: {prompt}" if system_prompt else prompt
 
-        if self._gemini_client:
+        # Try configured primary model first, followed by candidate cascade
+        models_to_try = [self.settings.GEMINI_LLM_MODEL] + [
+            m for m in CANDIDATE_MODELS if m != self.settings.GEMINI_LLM_MODEL
+        ]
+
+        last_error: Exception | None = None
+
+        for model_name in models_to_try:
             try:
                 response = self._gemini_client.models.generate_content(
-                    model=self.settings.GEMINI_LLM_MODEL,
+                    model=model_name,
                     contents=full_prompt,
                 )
                 if response and response.text:
                     return response.text.strip()
             except Exception as e:
-                logger.error("Gemini API call failed: %s. Using dynamic fallback.", e)
+                last_error = e
+                logger.debug("[LLMClient] Model %s failed (%s). Trying next candidate...", model_name, e)
+                continue
 
-        return self._local_fallback_text(prompt)
+        error_msg = f"All API models failed to generate response. Last error: {last_error}"
+        logger.error("[LLMClient] %s", error_msg)
+        raise RuntimeError(error_msg)
 
     def generate_json(self, prompt: str, system_prompt: str | None = None) -> dict[str, Any]:
         """
-        Generates structured JSON dictionary response.
+        Generates structured JSON dictionary response via API.
         Enforces JSON schema validation and extracts from markdown blocks.
         """
         augmented_system = (
@@ -79,50 +108,8 @@ class LLMClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
-            logger.warning("Failed to parse JSON response (%s). Raw: %s", e, raw_text[:200])
-            return {
-                "error": "Failed to parse LLM JSON",
-                "raw_text": raw_text,
-            }
-
-    def _local_fallback_text(self, prompt: str) -> str:
-        """
-        Context-aware local fallback when LLM API is unavailable.
-        Extracts entities from prompt to construct grounded responses.
-        """
-        prompt_lower = prompt.lower()
-
-        # Extract context if present in prompt
-        region_m = re.search(r"region:\s*([^\n,]+)", prompt, re.IGNORECASE)
-        product_m = re.search(r"product:\s*([^\n,]+)", prompt, re.IGNORECASE)
-        metric_m = re.search(r"metric:\s*([^\n,]+)", prompt, re.IGNORECASE)
-
-        region = region_m.group(1).strip() if region_m else "target region"
-        product = product_m.group(1).strip() if product_m else "financial product"
-        metric = metric_m.group(1).strip() if metric_m else "metric deviation"
-
-        if "supervisor" in prompt_lower or "next_agent" in prompt_lower or "hypothesis" in prompt_lower:
-            return json.dumps({
-                "hypothesis": f"Significant {metric} detected for {product} in {region}. Investigating underlying transaction telemetry and customer dispute grievances.",
-                "thought": f"Formulated investigation hypothesis for {metric}. Dispatching SQL Agent to verify telemetry.",
-                "next_agent": "sql_agent",
-            })
-        elif "sql" in prompt_lower:
-            return json.dumps({
-                "sql_query": f"SELECT metric_date, region, product_name, transaction_count, success_rate_pct, avg_latency_ms, chargeback_rate_pct FROM daily_spend_metrics WHERE region = '{region}' AND product_name = '{product}' ORDER BY metric_date DESC LIMIT 10;",
-                "explanation": f"Correlate historical telemetry records for {product} in {region}.",
-            })
-        elif "rag" in prompt_lower or "semantic_query" in prompt_lower:
-            return json.dumps({
-                "semantic_query": f"{product} {region} customer dispute grievance {metric}",
-            })
-        elif "synthesis" in prompt_lower or "rca" in prompt_lower:
-            return json.dumps({
-                "root_cause_summary": f"### Root Cause Summary\nAnalysis of telemetry data and customer complaints confirms anomalous {metric} affecting **{product}** in the **{region}** partition. Disproportionate dispute rates and latency spikes indicate infrastructure degradation during peak transaction periods.",
-                "confidence_score": 0.92,
-                "mitigation_steps": f"1. Audit partner gateway response times and retry queues for {product}.\n2. Scale asynchronous worker pools in {region}.\n3. Proactively communicate dispute resolution timeline to affected customers.",
-            })
-        return json.dumps({"status": "completed", "message": "Contextual fallback generated"})
+            logger.error("Failed to parse JSON response from LLM (%s). Raw text: %s", e, raw_text[:300])
+            raise ValueError(f"LLM returned non-JSON response: {raw_text[:200]}") from e
 
 
 _llm_client_instance: LLMClient | None = None

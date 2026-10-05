@@ -47,10 +47,10 @@ class Settings(BaseSettings):
     DEFAULT_LLM_MODEL: str = "qwen2.5:7b"
     EMBEDDING_MODEL: str = "all-minilm:latest"
 
-    # Google Gemini API Configuration (Optional / Free Tier)
+    # Google Gemini API Configuration (Live Free Tier & Pro)
     GEMINI_API_KEY: str | None = None
     GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
-    GEMINI_LLM_MODEL: str = "gemini-2.5-flash"
+    GEMINI_LLM_MODEL: str = "gemini-3.1-flash-lite"
 
 
     @computed_field  # type: ignore[misc]

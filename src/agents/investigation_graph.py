@@ -61,11 +61,16 @@ class InvestigationGraphBuilder:
             default_next = "synthesis_agent"
 
         system_prompt = (
-            "You are the Lead Detective Supervisor for InsightClue, an autonomous Data & Incident Root Cause Analysis engine. "
-            "Coordinate two specialist agents:\n"
-            "- 'sql_agent': Inspects telemetry tables (e.g. daily_spend_metrics, payment_gateway_logs).\n"
+            "You are the Lead Detective Supervisor for InsightClue, an autonomous Incident Root Cause Analysis engine.\n"
+            "Coordinate two specialist investigation agents:\n"
+            "- 'sql_agent': Queries telemetry tables (daily_spend_metrics) for quantitative trends.\n"
             "- 'rag_agent': Searches qualitative customer dispute support tickets and complaint narratives.\n"
-            "Return JSON with keys: 'hypothesis' (string), 'next_agent' ('sql_agent' or 'rag_agent'), and 'thought' (string)."
+            "- 'synthesis_agent': Synthesizes the final RCA report once evidence is collected.\n\n"
+            "Investigation Strategy:\n"
+            "1. If SQL telemetry is not yet gathered, dispatch 'sql_agent'.\n"
+            "2. If customer support tickets are not yet searched, dispatch 'rag_agent'.\n"
+            "3. If both SQL telemetry and ticket citations exist, dispatch 'synthesis_agent'.\n"
+            "Return JSON with keys: 'hypothesis' (string), 'next_agent' ('sql_agent' | 'rag_agent' | 'synthesis_agent'), and 'thought' (string)."
         )
 
         user_prompt = (

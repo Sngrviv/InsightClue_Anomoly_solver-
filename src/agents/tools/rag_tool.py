@@ -29,6 +29,7 @@ class DisputeTicketRAGTool:
     ) -> list[TicketCitation]:
         """
         Executes semantic search and formats results into serializable TicketCitation dicts.
+        If strict partitioned filtering returns empty, falls back to broad semantic vector matching.
         """
         matches = await self.vector_store.search(
             query=query,
@@ -36,9 +37,20 @@ class DisputeTicketRAGTool:
             product_name=product_name,
             customer_tier=customer_tier,
             dataset_source=dataset_source,
+            min_similarity=0.40,
             limit=limit,
             session=session,
         )
+
+        # If zero matches found with region/product filter, perform broad semantic vector search
+        if not matches:
+            matches = await self.vector_store.search(
+                query=query,
+                dataset_source=dataset_source,
+                min_similarity=0.35,
+                limit=limit,
+                session=session,
+            )
 
         citations: list[TicketCitation] = []
         for match in matches:
