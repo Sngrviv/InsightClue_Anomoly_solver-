@@ -114,4 +114,7 @@ async def ingest_real_data(max_records: int = 1500):
 
 
 if __name__ == "__main__":
-    asyncio.run(ingest_real_data(max_records=1500))
+    limit = 500
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        limit = int(sys.argv[1])
+    asyncio.run(ingest_real_data(max_records=limit))

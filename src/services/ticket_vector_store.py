@@ -203,6 +203,7 @@ class TicketVectorStore:
                 inserted += 1
 
             await session.flush()
+            print(f"   - Generated embeddings and indexed {inserted:,}/{total:,} tickets into pgvector...")
 
         return inserted
 

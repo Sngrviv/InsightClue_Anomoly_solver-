@@ -130,6 +130,7 @@ class UniversalDatasetAdapter:
                     break
 
         elif path.suffix.lower() in [".sqlite", ".db", ".sqlite3"]:
+            print(f"   - Connecting to SQLite database ({path.name})...")
             conn = sqlite3.connect(path)
             cur = conn.cursor()
             cur.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;")
@@ -141,12 +142,14 @@ class UniversalDatasetAdapter:
             table_name = table_row[0]
             query = f"SELECT * FROM {table_name}"
             if filter_has_narrative:
-                query += f" WHERE {mapping.text_col} IS NOT NULL AND {mapping.text_col} != '' AND LOWER({mapping.text_col}) != 'nan'"
+                query += f" WHERE {mapping.text_col} IS NOT NULL AND length({mapping.text_col}) > 10"
             query += f" LIMIT {max_records}"
             
+            print(f"   - Querying {max_records:,} records with narratives from '{table_name}'...")
             df = pd.read_sql_query(query, conn)
             conn.close()
 
+            print(f"   - Normalizing {len(df):,} records into domain models...")
             for _, row in df.iterrows():
                 norm = self._normalize_row(row, mapping)
                 if norm:
