@@ -174,10 +174,15 @@ class InvestigationService:
                     yield f"event: ticket_evidence\ndata: {json.dumps(ticket)}\n\n"
 
                 if node_name == "synthesis_agent":
+                    raw_summary = node_state.get("root_cause_summary", "")
+                    summary_str = "\n\n".join(raw_summary) if isinstance(raw_summary, list) else str(raw_summary or "")
+                    raw_mitigation = node_state.get("mitigation_steps", "")
+                    mitigation_str = "\n".join(raw_mitigation) if isinstance(raw_mitigation, list) else str(raw_mitigation or "")
+
                     rca_payload = {
-                        "root_cause_summary": node_state.get("root_cause_summary"),
-                        "confidence_score": node_state.get("confidence_score"),
-                        "mitigation_steps": node_state.get("mitigation_steps"),
+                        "root_cause_summary": summary_str,
+                        "confidence_score": float(node_state.get("confidence_score") or 0.85),
+                        "mitigation_steps": mitigation_str,
                     }
                     yield f"event: rca_report\ndata: {json.dumps(rca_payload)}\n\n"
 

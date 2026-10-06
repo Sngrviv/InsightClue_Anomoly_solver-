@@ -12,12 +12,15 @@ async def test_health_check_endpoints(api_client: AsyncClient) -> None:
     res = await api_client.get("/health")
     assert res.status_code == 200
     data = res.json()
-    assert data["status"] == "healthy"
+    assert data["status"] in ["healthy", "degraded"]
     assert "app_name" in data
+    assert "database" in data
+    assert "connected" in data["database"]
 
     res_v1 = await api_client.get("/api/v1/health")
     assert res_v1.status_code == 200
-    assert res_v1.json()["status"] == "healthy"
+    assert res_v1.json()["status"] in ["healthy", "degraded"]
+    assert "database" in res_v1.json()
 
 
 @pytest.mark.asyncio

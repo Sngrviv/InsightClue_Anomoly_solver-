@@ -43,6 +43,36 @@
         </div>
     </header>
 
+    <!-- System / Docker Offline Alert Banner -->
+    <div id="system-offline-banner" class="system-alert-banner hidden">
+        <div class="alert-banner-content">
+            <div class="alert-icon-wrapper">
+                <span class="alert-icon">⚠️</span>
+            </div>
+            <div class="alert-body">
+                <div class="alert-title-row">
+                    <strong class="alert-title">Database Service Offline (Docker Container Unreachable)</strong>
+                    <span class="badge-status-offline">PostgreSQL 5432 Offline</span>
+                </div>
+                <p class="alert-desc" id="offline-banner-msg">
+                    The backend database engine is not responding. Please make sure Docker Desktop is started and the database container is running:
+                </p>
+                <div class="alert-cmd-box">
+                    <code id="docker-cmd-text">docker-compose up -d</code>
+                    <button id="btn-copy-docker-cmd" class="btn btn-xs btn-outline" title="Copy command to clipboard">
+                        📋 Copy Command
+                    </button>
+                </div>
+            </div>
+            <div class="alert-actions">
+                <button id="btn-retry-health" class="btn btn-sm btn-primary">
+                    <span class="btn-spinner hidden" id="retry-spinner">⏳</span>
+                    <span id="retry-btn-label">🔄 Retry Connection</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Guided 4-Step Interactive Workflow Ribbon -->
     <section class="workflow-ribbon">
         <div class="ribbon-step active" id="step-1">

@@ -130,7 +130,7 @@ class UniversalDatasetAdapter:
                     break
 
         elif path.suffix.lower() in [".sqlite", ".db", ".sqlite3"]:
-            print(f"   - Connecting to SQLite database ({path.name})...")
+            logger.info(f"Connecting to SQLite database ({path.name})...")
             conn = sqlite3.connect(path)
             cur = conn.cursor()
             cur.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;")
@@ -145,11 +145,11 @@ class UniversalDatasetAdapter:
                 query += f" WHERE {mapping.text_col} IS NOT NULL AND length({mapping.text_col}) > 10"
             query += f" LIMIT {max_records}"
             
-            print(f"   - Querying {max_records:,} records with narratives from '{table_name}'...")
+            logger.info(f"Querying {max_records:,} records with narratives from '{table_name}'...")
             df = pd.read_sql_query(query, conn)
             conn.close()
 
-            print(f"   - Normalizing {len(df):,} records into domain models...")
+            logger.info(f"Normalizing {len(df):,} records into domain models...")
             for _, row in df.iterrows():
                 norm = self._normalize_row(row, mapping)
                 if norm:
@@ -308,9 +308,9 @@ class UniversalDatasetAdapter:
         start_time = datetime.now(timezone.utc)
 
         records = self.load_and_normalize_records(source_path, mapping, max_records=max_records)
-        print(f"   - 🧠 Generating embeddings and indexing {len(records):,} tickets into pgvector...")
+        logger.info(f"Generating embeddings and indexing {len(records):,} tickets into pgvector...")
         tickets_count = await self.ingest_dispute_tickets(records, session, dataset_source=dataset_source, batch_size=25)
-        print(f"   - 📊 Aggregating {len(records):,} tickets into daily time-series metrics...")
+        logger.info(f"Aggregating {len(records):,} tickets into daily time-series metrics...")
         metrics_count = await self.aggregate_to_daily_metrics(records, session, dataset_source=dataset_source)
 
         elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()

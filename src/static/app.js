@@ -11,11 +11,99 @@ let activeFilter = 'ALL';
 let currentDatasetSource = 'FINTECH_90D';
 
 document.addEventListener('DOMContentLoaded', () => {
+    checkSystemHealth();
     loadOverviewKPIs();
     loadTimeseriesChart();
     loadAnomalies();
     setupEventListeners();
 });
+
+// System & Database Connectivity Health Probe
+async function checkSystemHealth(isManualRetry = false) {
+    const retrySpinner = document.getElementById('retry-spinner');
+    const retryLabel = document.getElementById('retry-btn-label');
+    
+    if (isManualRetry && retrySpinner && retryLabel) {
+        retrySpinner.classList.remove('hidden');
+        retryLabel.textContent = 'Checking...';
+    }
+
+    try {
+        const res = await fetch('/api/v1/health');
+        const data = await res.json();
+        
+        if (data.status === 'healthy' && data.database?.connected) {
+            hideOfflineBanner();
+            if (isManualRetry) {
+                showToast('✅ Database connected! Live telemetry online.', 'success');
+                loadOverviewKPIs();
+                loadTimeseriesChart();
+                loadAnomalies();
+            }
+        } else {
+            const errorMsg = data.database?.action_required || "Please ensure Docker Desktop is running and execute 'docker-compose up -d'.";
+            showOfflineBanner(errorMsg);
+            if (isManualRetry) {
+                showToast('❌ Database is still offline. Run docker-compose up -d', 'warning');
+            }
+        }
+    } catch (err) {
+        showOfflineBanner("Cannot communicate with backend API or database. Check your Docker containers.");
+        if (isManualRetry) {
+            showToast('❌ Backend server unreachable.', 'error');
+        }
+    } finally {
+        if (retrySpinner && retryLabel) {
+            retrySpinner.classList.add('hidden');
+            retryLabel.textContent = '🔄 Retry Connection';
+        }
+    }
+}
+
+function showOfflineBanner(actionText) {
+    const banner = document.getElementById('system-offline-banner');
+    if (!banner) return;
+    banner.classList.remove('hidden');
+    const msgEl = document.getElementById('offline-banner-msg');
+    if (msgEl && actionText) {
+        msgEl.innerHTML = `<strong>Service Unreachable:</strong> ${actionText}`;
+    }
+}
+
+function hideOfflineBanner() {
+    const banner = document.getElementById('system-offline-banner');
+    if (banner) banner.classList.add('hidden');
+}
+
+async function handleApiError(errOrRes, context = 'Operation') {
+    let errorDetail = '';
+    let isDbOffline = false;
+
+    if (errOrRes instanceof Response) {
+        try {
+            const data = await errOrRes.json();
+            errorDetail = data.detail || data.error || errOrRes.statusText;
+            if (errOrRes.status === 503 || data.error === 'DATABASE_SERVICE_OFFLINE' || (typeof errorDetail === 'string' && errorDetail.toLowerCase().includes('database'))) {
+                isDbOffline = true;
+            }
+        } catch {
+            errorDetail = `HTTP ${errOrRes.status}`;
+            if (errOrRes.status === 503) isDbOffline = true;
+        }
+    } else if (errOrRes instanceof Error) {
+        errorDetail = errOrRes.message;
+        if (errorDetail.includes('Failed to fetch') || errorDetail.includes('NetworkError') || errorDetail.includes('503')) {
+            isDbOffline = true;
+        }
+    }
+
+    if (isDbOffline) {
+        showOfflineBanner("Database service is offline. Make sure Docker Desktop is started and execute 'docker-compose up -d'.");
+        showToast(`⚠️ Database container offline. Run 'docker-compose up -d' in terminal.`, 'warning');
+    } else {
+        showToast(`${context} failed: ${errorDetail || 'Unexpected error'}`, 'error');
+    }
+}
 
 // Toast Notification Manager
 function showToast(message, type = 'info') {
@@ -45,6 +133,23 @@ function showToast(message, type = 'info') {
 }
 
 function setupEventListeners() {
+    // Docker Command Copy & Retry Buttons
+    const btnCopy = document.getElementById('btn-copy-docker-cmd');
+    if (btnCopy) {
+        btnCopy.addEventListener('click', () => {
+            navigator.clipboard.writeText('docker-compose up -d').then(() => {
+                showToast('📋 Copied "docker-compose up -d" to clipboard!', 'success');
+            }).catch(() => {
+                showToast('Command: docker-compose up -d', 'info');
+            });
+        });
+    }
+
+    const btnRetry = document.getElementById('btn-retry-health');
+    if (btnRetry) {
+        btnRetry.addEventListener('click', () => checkSystemHealth(true));
+    }
+
     // Dataset Mode Switcher
     const datasetSelect = document.getElementById('dataset-mode-select');
     if (datasetSelect) {
@@ -101,6 +206,7 @@ function setupEventListeners() {
         step4.addEventListener('click', () => {
             setWorkflowStep(4);
             document.getElementById('report-container')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showToast('Viewing executive RCA report & mitigation recommendations.', 'info');
         });
     }
 
@@ -134,11 +240,36 @@ function setupEventListeners() {
             if (card && card.dataset.anomalyId) {
                 const anomalyId = parseInt(card.dataset.anomalyId, 10);
                 if (anomalyId) {
-                    startInvestigation(anomalyId);
+                    showExistingReport(anomalyId);
                 }
             }
         });
     }
+}
+
+async function showExistingReport(anomalyId) {
+    const reportContainer = document.getElementById('report-container');
+    if (!reportContainer) return;
+    
+    // Highlight card
+    document.querySelectorAll('.anomaly-card').forEach(c => c.classList.remove('investigating'));
+    const activeCard = document.getElementById(`anomaly-card-${anomalyId}`);
+    if (activeCard) activeCard.classList.add('investigating');
+
+    try {
+        const res = await fetch(`/api/v1/investigations/reports/${anomalyId}`);
+        if (res.ok) {
+            const data = await res.json();
+            renderExecutiveRCA(data, reportContainer);
+            setWorkflowStep(4);
+            reportContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showToast(`Loaded existing RCA report for Incident #${anomalyId}.`, 'info');
+            return;
+        }
+    } catch {
+        // Fall back to launching investigation stream
+    }
+    startInvestigation(anomalyId);
 }
 
 function setWorkflowStep(stepNumber) {
@@ -417,7 +548,10 @@ async function runDetectionScan() {
         showToast(`Running Statistical & Isolation Forest scan on ${currentDatasetSource}...`, 'loading');
         
         const res = await fetch(`/api/v1/anomalies/detect?dataset_source=${currentDatasetSource}`, { method: 'POST' });
-        if (!res.ok) throw new Error(`Scan request failed (${res.status})`);
+        if (!res.ok) {
+            await handleApiError(res, 'Detection scan');
+            return;
+        }
         const data = await res.json();
         
         showToast(`🎯 Scan Complete: ${data.new_anomalies_flagged} anomalies identified!`, 'success');
@@ -425,7 +559,7 @@ async function runDetectionScan() {
         await loadAnomalies();
         setWorkflowStep(2);
     } catch (err) {
-        showToast('Detection scan failed: ' + err.message, 'error');
+        await handleApiError(err, 'Detection scan');
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -443,7 +577,10 @@ async function triggerCFPBIngestion() {
     try {
         showToast('Ingesting CFPB Kaggle complaints & generating vector embeddings...', 'loading');
         const res = await fetch('/api/v1/anomalies/ingest-cfpb?limit=250', { method: 'POST' });
-        if (!res.ok) throw new Error(`Ingestion failed (${res.status})`);
+        if (!res.ok) {
+            await handleApiError(res, 'CFPB Ingestion');
+            return;
+        }
         const data = await res.json();
         
         showToast(`📂 Ingestion Success: ${data.message}`, 'success');
@@ -457,7 +594,7 @@ async function triggerCFPBIngestion() {
         await loadTimeseriesChart();
         await loadAnomalies();
     } catch (e) {
-        showToast('CFPB Ingestion failed: ' + e.message, 'error');
+        await handleApiError(e, 'CFPB Ingestion');
         console.error(e);
     } finally {
         btn.innerHTML = original;
@@ -550,11 +687,25 @@ function startInvestigation(anomalyId) {
         showToast('🎯 Executive RCA verdict synthesized!', 'success');
     });
 
-    currentEventSource.addEventListener('complete', (e) => {
+    currentEventSource.addEventListener('complete', async (e) => {
         appendTerminalEntry('System Gateway', '✅ Investigation stream completed and report persisted.', 'agent-supervisor');
         if (liveChip) liveChip.className = 'live-status-chip idle';
         if (liveText) liveText.textContent = 'Squad Idle';
         currentEventSource.close();
+
+        // Guaranteed render of persisted report
+        if (reportContainer && reportContainer.querySelector('.report-placeholder')) {
+            try {
+                const repRes = await fetch(`/api/v1/investigations/reports/${anomalyId}`);
+                if (repRes.ok) {
+                    const repData = await repRes.json();
+                    renderExecutiveRCA(repData, reportContainer);
+                }
+            } catch (err) {
+                console.warn('Could not fetch persisted report:', err);
+            }
+        }
+
         loadOverviewKPIs();
         loadAnomalies();
     });
@@ -568,11 +719,27 @@ function startInvestigation(anomalyId) {
 }
 
 function renderExecutiveRCA(data, container) {
-    const confidencePct = (data.confidence_score * 100).toFixed(0);
-    const summaryHtml = window.marked ? marked.parse(data.root_cause_summary) : data.root_cause_summary;
+    if (!data || !container) return;
+    const confidencePct = (Number(data.confidence_score || 0.85) * 100).toFixed(0);
     
+    // Parse summary
+    let summaryText = data.root_cause_summary || "Detailed root cause analysis established.";
+    if (Array.isArray(summaryText)) {
+        summaryText = summaryText.join("\n\n");
+    }
+    const summaryHtml = (window.marked && typeof marked.parse === 'function') 
+        ? marked.parse(summaryText) 
+        : summaryText.replace(/\n/g, '<br>');
+
     // Parse mitigation lines into list items
-    const rawSteps = (data.mitigation_steps || '').split('\n').filter(s => s.trim().length > 0);
+    let rawSteps = [];
+    if (Array.isArray(data.mitigation_steps)) {
+        rawSteps = data.mitigation_steps;
+    } else if (typeof data.mitigation_steps === 'string') {
+        rawSteps = data.mitigation_steps.split('\n');
+    }
+    rawSteps = rawSteps.filter(s => typeof s === 'string' && s.trim().length > 0);
+    
     const stepItems = rawSteps.map(s => `<li class="action-item"><input type="checkbox" checked disabled> <span>${s.replace(/^\d+\.\s*/, '')}</span></li>`).join('');
 
     container.innerHTML = `
@@ -600,7 +767,7 @@ function renderExecutiveRCA(data, container) {
             <div>
                 <div class="rca-section-title">🛠️ Recommended Action Plan</div>
                 <ul class="action-checklist">
-                    ${stepItems || '<li class="action-item"><span>1. Failover to backup gateway switch.</span></li>'}
+                    ${stepItems || '<li class="action-item"><span>1. Isolate degraded routing channels and audit thresholds.</span></li>'}
                 </ul>
             </div>
         </div>

@@ -176,7 +176,7 @@ class TicketVectorStore:
                 # Truncate to first 1024 characters for FastEmbed ONNX token window efficiency
                 messages.append(msg[:1024])
 
-            print(f"   - [Batch {batch_idx}/{total_batches}] Generating 768-dim embeddings for {len(chunk)} tickets...")
+            logger.info(f"[Batch {batch_idx}/{total_batches}] Generating 768-dim embeddings for {len(chunk)} tickets...")
             # Compute embeddings in worker thread to prevent event-loop block
             embeddings = await asyncio.to_thread(_compute_embeddings_batch, messages, False)
 
@@ -205,7 +205,7 @@ class TicketVectorStore:
                 inserted += 1
 
             await session.flush()
-            print(f"   - ✅ [Batch {batch_idx}/{total_batches}] Indexed {inserted:,}/{total:,} tickets into pgvector.")
+            logger.info(f"[Batch {batch_idx}/{total_batches}] Indexed {inserted:,}/{total:,} tickets into pgvector.")
 
         return inserted
 

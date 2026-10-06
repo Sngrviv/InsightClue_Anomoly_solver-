@@ -9,13 +9,19 @@ import logging
 import os
 from pathlib import Path
 from typing import AsyncGenerator
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from src.api.routes import api_v1_router
+import asyncio
+from typing import Any
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 from src.config.settings import get_settings
-from src.database.session import close_db_engine, init_db_engine
+from src.database.session import AsyncSessionFactory, close_db_engine, init_db_engine
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +50,24 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# Global Exception Handler for Database / Docker Container Offline Errors
+@app.exception_handler(OperationalError)
+@app.exception_handler(ConnectionRefusedError)
+@app.exception_handler(OSError)
+async def db_connection_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Interceptors database offline / container down errors and serves user-friendly 503 guidance."""
+    err_str = str(exc)
+    logger.warning(f"Intercepted database connection failure on {request.url.path}: {err_str}")
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "error": "DATABASE_SERVICE_OFFLINE",
+            "detail": "Database engine is offline. PostgreSQL / pgvector container is unreachable on port 5432.",
+            "action_required": "Please ensure Docker Desktop is running and run 'docker-compose up -d' in your terminal.",
+            "retry_endpoint": "/api/v1/health",
+        },
+    )
+
 # Configure CORS Middleware
 app.add_middleware(
     CORSMiddleware,
@@ -62,6 +86,11 @@ if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.get("/", include_in_schema=False)
 async def serve_dashboard() -> FileResponse:
     """Serves the Single-Page FinTech Mission Control Dashboard."""
@@ -69,14 +98,37 @@ async def serve_dashboard() -> FileResponse:
     return FileResponse(str(index_file))
 
 
+async def probe_database_connection() -> tuple[bool, str | None]:
+    """Probes PostgreSQL database connectivity with a strict timeout."""
+    try:
+        async with asyncio.timeout(2.0):
+            async with AsyncSessionFactory() as session:
+                await session.execute(text("SELECT 1"))
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
 @app.get("/health", tags=["Health"])
 @app.get("/api/v1/health", tags=["Health"])
-async def health_check() -> dict[str, str]:
+async def health_check() -> dict[str, Any]:
     """
-    System health check endpoint.
+    Active system and database health check endpoint.
+    Probes PostgreSQL & pgvector container readiness.
     """
+    is_db_up, db_err = await probe_database_connection()
     return {
-        "status": "healthy",
+        "status": "healthy" if is_db_up else "degraded",
+        "database": {
+            "connected": is_db_up,
+            "engine": "PostgreSQL 16 + pgvector (localhost:5432)",
+            "error": db_err if not is_db_up else None,
+            "action_required": (
+                "Ensure Docker Desktop is running and execute 'docker-compose up -d'."
+                if not is_db_up
+                else None
+            ),
+        },
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
