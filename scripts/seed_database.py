@@ -22,6 +22,9 @@ if sys.stdout.encoding != "utf-8":
     except Exception:
         pass
 
+import logging
+logging.basicConfig(level=logging.INFO, format="   %(message)s")
+
 from sqlalchemy import text
 from src.adapters.dataset_adapter import CFPB_MAPPING, UniversalDatasetAdapter
 from src.database.base import Base
@@ -81,6 +84,7 @@ async def ingest_real_data(max_records: int = 1500):
             max_records=max_records,
             dataset_source="KAGGLE_CFPB",
         )
+        await session.commit()
 
     print(f"✅ Ingestion Complete in {result.duration_seconds:.2f}s:")
     print(f"   - Parsed Records: {result.total_parsed:,}")
@@ -92,6 +96,7 @@ async def ingest_real_data(max_records: int = 1500):
     engine = AnomalyDetectionEngine(rolling_window_days=7, z_score_threshold=2.0)
     async with AsyncSessionFactory() as session:
         events = await engine.scan_and_persist(session=session, dataset_source="KAGGLE_CFPB")
+        await session.commit()
 
     print(f"🚨 Detected and Persisted {len(events)} Anomaly Events in KAGGLE_CFPB data.")
 
