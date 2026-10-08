@@ -1,152 +1,195 @@
 meta:
   profile: default
   theme: arch-dark
-  layout: hierarchical
-  title: "InsightClue Enterprise Architecture: Autonomous Multi-Agent FinTech Anomaly & RCA Engine"
-  description: "End-to-End System Architecture: FastAPI, Deep Domain Services, LangGraph Autonomous Squad, LLM Gateway Cascade, pgvector, and PostgreSQL 16"
+  layout: horizontal
+  canvas: 1440x900
+  title: "InsightClue Enterprise Architecture"
+  description: "Autonomous Multi-Agent FinTech Anomaly Detection & RCA Engine"
 
 modules:
-  - id: client_layer
-    label: "Client & Presentation Layer"
-  - id: api_layer
-    label: "FastAPI Async Web Gateway & Routing"
-  - id: domain_services
-    label: "Core Domain Services & Seams"
-  - id: agent_squad
-    label: "LangGraph Multi-Agent Investigation Squad"
-  - id: ai_gateway
-    label: "Local FastEmbed & Async Multi-Model LLM Gateway"
-  - id: storage_layer
-    label: "Persistence & Infrastructure Tier"
+  - id: client_tier
+    label: "Client Tier"
+    style:
+      fillColor: none
+      strokeColor: "#334155"
+      dashed: true
+      dashPattern: "6 4"
+
+  - id: api_tier
+    label: "FastAPI Gateway & Route Adapters"
+    style:
+      fillColor: none
+      strokeColor: "#334155"
+      dashed: true
+      dashPattern: "6 4"
+
+  - id: service_tier
+    label: "Core Domain Services Tier"
+    style:
+      fillColor: none
+      strokeColor: "#334155"
+      dashed: true
+      dashPattern: "6 4"
+
+  - id: agent_tier
+    label: "LangGraph Multi-Agent Investigation Squad & AI Gateway"
+    style:
+      fillColor: none
+      strokeColor: "#334155"
+      dashed: true
+      dashPattern: "6 4"
+
+  - id: infra_tier
+    label: "Persistence & Data Infrastructure Tier"
+    style:
+      fillColor: none
+      strokeColor: "#334155"
+      dashed: true
+      dashPattern: "6 4"
 
 nodes:
-  # --- Client Layer ---
+  # ================= Row 1: Client Tier (y: 80) =================
   - id: mission_control_ui
-    label: "Mission Control UI\n(Vanilla JS • CSS3 • Chart.js)"
+    label: "Mission Control UI\n(Vanilla JS • CSS3 • Charts)"
     type: user
-    module: client_layer
+    module: client_tier
+    position: { x: 220, y: 80 }
 
-  - id: sse_event_source
-    label: "SSE EventSource\n(Real-Time Stream Consumer)"
+  - id: sse_client
+    label: "SSE EventSource\n(Real-Time Agent Stream)"
     type: user
-    module: client_layer
+    module: client_tier
+    position: { x: 980, y: 80 }
 
-  # --- API Gateway Layer ---
+  # ================= Row 2: API Tier (y: 200) =================
   - id: fastapi_gateway
-    label: "FastAPI Gateway\n(Python 3.13 • ASGI • Uvicorn)"
+    label: "FastAPI Web Gateway\n(Python 3.13 • ASGI)"
     type: gateway
-    module: api_layer
+    module: api_tier
+    position: { x: 220, y: 200 }
 
   - id: metrics_route
     label: "Metrics Route\n(/api/metrics)"
     type: service
-    module: api_layer
+    module: api_tier
+    position: { x: 460, y: 200 }
 
   - id: anomalies_route
     label: "Anomalies Route\n(/api/anomalies)"
     type: service
-    module: api_layer
+    module: api_tier
+    position: { x: 720, y: 200 }
 
   - id: investigations_route
     label: "Investigations Route\n(/api/investigations)"
     type: service
-    module: api_layer
+    module: api_tier
+    position: { x: 980, y: 200 }
 
-  # --- Core Domain Services ---
+  # ================= Row 3: Domain Services (y: 340) =================
+  - id: dataset_adapter
+    label: "DatasetAdapter\n(CFPB SQLite Ingestion)"
+    type: process
+    module: service_tier
+    position: { x: 220, y: 340 }
+
   - id: telemetry_store
-    label: "TelemetryMetricStore\n(SQL Aggregations & Date Grouping)"
+    label: "TelemetryMetricStore\n(SQL Aggregation Seam)"
     type: service
-    module: domain_services
+    module: service_tier
+    position: { x: 460, y: 340 }
 
   - id: anomaly_detector
-    label: "AnomalyDetector Engine\n(Rolling Z-Score & Isolation Forest)"
+    label: "AnomalyDetector Engine\n(Z-Score & Isolation Forest)"
     type: process
-    module: domain_services
+    module: service_tier
+    position: { x: 720, y: 340 }
 
   - id: investigation_service
-    label: "InvestigationService\n(State Coordinator & SSE Emitter)"
+    label: "InvestigationService\n(LangGraph Coordinator)"
     type: service
-    module: domain_services
-
-  - id: dataset_adapter
-    label: "DatasetAdapter\n(Kaggle CFPB Chunk Ingestion)"
-    type: process
-    module: domain_services
+    module: service_tier
+    position: { x: 980, y: 340 }
 
   - id: ticket_vector_store
     label: "TicketVectorStore\n(Cosine Distance <=> Search)"
     type: vector_store
-    module: domain_services
+    module: service_tier
+    position: { x: 1260, y: 340 }
 
-  # --- LangGraph Multi-Agent Squad ---
+  # ================= Row 4: LangGraph Squad & LLM Gateway (y: 490-610) =================
   - id: supervisor_agent
-    label: "Supervisor Agent\n(Triage & Hypothesis Planner)"
+    label: "Supervisor Agent\n(Triage & Hypothesis)"
     type: agent
-    module: agent_squad
+    module: agent_tier
+    position: { x: 980, y: 480 }
 
   - id: sql_analyst_agent
     label: "SQL Analyst Agent\n(Telemetry Query Specialist)"
     type: agent
-    module: agent_squad
+    module: agent_tier
+    position: { x: 460, y: 490 }
 
   - id: support_vector_agent
-    label: "Support Vector Agent\n(CFPB Complaint Dispute Analyst)"
+    label: "Support Vector Agent\n(CFPB Dispute Analyst)"
     type: agent
-    module: agent_squad
-
-  - id: synthesizer_agent
-    label: "Synthesizer Agent\n(RCA Confidence & Evidence Synthesis)"
-    type: agent
-    module: agent_squad
+    module: agent_tier
+    position: { x: 720, y: 540 }
 
   - id: sql_sandbox
-    label: "Read-Only SQL Sandbox\n(AST & Regex Guardrails • LIMIT 50)"
+    label: "SQL AST Sandbox\n(Safe Read-Only Guardrails)"
     type: tool
-    module: agent_squad
+    module: agent_tier
+    position: { x: 460, y: 610 }
 
-  # --- AI & LLM Gateway ---
+  - id: synthesizer_agent
+    label: "Synthesizer Agent\n(RCA Confidence & Verdict)"
+    type: agent
+    module: agent_tier
+    position: { x: 980, y: 600 }
+
   - id: llm_client
-    label: "Async LLM Gateway (LLMClient)\n(Failover Cascade: 3.1-flash / lite)"
+    label: "Async LLM Gateway (LLMClient)\n(Cascade: 3.1-flash / lite)"
     type: llm
-    module: ai_gateway
+    module: agent_tier
+    position: { x: 1260, y: 540 }
 
-  - id: fastembed_engine
-    label: "FastEmbed ONNX Engine\n(bge-base-en-v1.5 • 768-dim)"
-    type: process
-    module: ai_gateway
+  # ================= Row 5: Infrastructure (y: 750) =================
+  - id: redis_cache
+    label: "Redis 7 Cache\n(Telemetry Cache)"
+    type: memory
+    module: infra_tier
+    position: { x: 220, y: 750 }
 
-  # --- Storage Tier ---
   - id: postgres_db
     label: "PostgreSQL 16 Engine\n(Telemetry • Anomalies • Reports)"
     type: database
-    module: storage_layer
+    module: infra_tier
+    position: { x: 500, y: 750 }
 
   - id: pgvector_store
-    label: "pgvector HNSW Index\n(support_tickets Cosine Index)"
+    label: "pgvector (HNSW Index)\n(768-dim Vectors)"
     type: vector_store
-    module: storage_layer
+    module: infra_tier
+    position: { x: 780, y: 750 }
 
-  - id: redis_cache
-    label: "Redis 7 Cache\n(Telemetry Cache & Pub/Sub)"
-    type: memory
-    module: storage_layer
+  - id: fastembed_engine
+    label: "FastEmbed ONNX Engine\n(bge-base-en-v1.5)"
+    type: process
+    module: infra_tier
+    position: { x: 1080, y: 750 }
 
-  # --- Legend ---
+  # ================= Legend (y: 840) =================
   - id: legend
-    label: "Legend:  gray = primary   orange = control   green = memory read/write   dashed = data/async stream   violet = feedback"
+    label: "Legend:  gray = primary flow   orange = agent control   green = memory/data   violet = RCA feedback"
     type: text
-    bounds:
-      x: 100
-      y: 950
-      width: 900
-      height: 36
+    position: { x: 720, y: 840 }
 
 edges:
-  # Client to API
+  # Client & API Flow
   - from: mission_control_ui
     to: fastapi_gateway
     type: primary
-    label: "REST Requests"
 
   - from: fastapi_gateway
     to: metrics_route
@@ -161,16 +204,14 @@ edges:
     type: primary
 
   - from: investigations_route
-    to: sse_event_source
+    to: sse_client
     type: data
-    label: "SSE Stream"
 
-  - from: sse_event_source
+  - from: sse_client
     to: mission_control_ui
     type: primary
-    label: "Stream Updates"
 
-  # Routes to Deep Services
+  # Routes to Services
   - from: metrics_route
     to: telemetry_store
     type: primary
@@ -183,11 +224,7 @@ edges:
     to: investigation_service
     type: primary
 
-  # Service Interactions
-  - from: dataset_adapter
-    to: fastembed_engine
-    type: data
-
+  # Services to Infra & Storage
   - from: dataset_adapter
     to: postgres_db
     type: memory_write
@@ -208,6 +245,7 @@ edges:
     to: postgres_db
     type: memory_write
 
+  # Investigation & Agent Flow
   - from: investigation_service
     to: supervisor_agent
     type: control
@@ -216,16 +254,13 @@ edges:
     to: postgres_db
     type: memory_write
 
-  # Multi-Agent Workflow
   - from: supervisor_agent
     to: sql_analyst_agent
     type: control
-    label: "Dispatch SQL"
 
   - from: supervisor_agent
     to: support_vector_agent
     type: control
-    label: "Dispatch Vector"
 
   - from: sql_analyst_agent
     to: sql_sandbox
@@ -250,28 +285,16 @@ edges:
   - from: sql_analyst_agent
     to: synthesizer_agent
     type: data
-    label: "Quantitative Facts"
 
   - from: support_vector_agent
     to: synthesizer_agent
     type: data
-    label: "Qualitative Disputes"
 
   - from: synthesizer_agent
     to: supervisor_agent
     type: feedback
-    label: "RCA Verdict"
 
-  # Agents to LLM Gateway
   - from: supervisor_agent
-    to: llm_client
-    type: data
-
-  - from: sql_analyst_agent
-    to: llm_client
-    type: data
-
-  - from: support_vector_agent
     to: llm_client
     type: data
 

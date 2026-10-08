@@ -1,146 +1,146 @@
 {
   "version": 1,
-  "title": "InsightClue Enterprise Architecture: Autonomous Multi-Agent FinTech Anomaly & RCA Engine",
+  "title": "InsightClue Enterprise Architecture",
   "type": "module-diagram",
   "source": "generated",
   "profile": "default",
   "theme": "arch-dark",
-  "layout": "hierarchical",
+  "layout": "horizontal",
   "counts": {
     "nodes": 22,
-    "edges": 31,
-    "modules": 6
+    "edges": 28,
+    "modules": 5
   },
   "nodes": [
     {
       "id": "mission_control_ui",
-      "label": "Mission Control UI\n(Vanilla JS • CSS3 • Chart.js)",
+      "label": "Mission Control Dashboard\n(Vanilla JS • CSS3 • Chart.js)",
       "type": "user",
-      "module": "client_layer"
+      "module": "client_tier"
     },
     {
-      "id": "sse_event_source",
-      "label": "SSE EventSource\n(Real-Time Stream Consumer)",
+      "id": "sse_client",
+      "label": "SSE EventSource Client\n(Real-Time Agent Stream)",
       "type": "user",
-      "module": "client_layer"
+      "module": "client_tier"
     },
     {
       "id": "fastapi_gateway",
-      "label": "FastAPI Gateway\n(Python 3.13 • ASGI • Uvicorn)",
+      "label": "FastAPI Gateway\n(Python 3.13 • ASGI)",
       "type": "gateway",
-      "module": "api_layer"
+      "module": "api_tier"
     },
     {
       "id": "metrics_route",
       "label": "Metrics Route\n(/api/metrics)",
       "type": "service",
-      "module": "api_layer"
+      "module": "api_tier"
     },
     {
       "id": "anomalies_route",
       "label": "Anomalies Route\n(/api/anomalies)",
       "type": "service",
-      "module": "api_layer"
+      "module": "api_tier"
     },
     {
       "id": "investigations_route",
       "label": "Investigations Route\n(/api/investigations)",
       "type": "service",
-      "module": "api_layer"
-    },
-    {
-      "id": "telemetry_store",
-      "label": "TelemetryMetricStore\n(SQL Aggregations & Date Grouping)",
-      "type": "service",
-      "module": "domain_services"
-    },
-    {
-      "id": "anomaly_detector",
-      "label": "AnomalyDetector Engine\n(Rolling Z-Score & Isolation Forest)",
-      "type": "process",
-      "module": "domain_services"
-    },
-    {
-      "id": "investigation_service",
-      "label": "InvestigationService\n(State Coordinator & SSE Emitter)",
-      "type": "service",
-      "module": "domain_services"
+      "module": "api_tier"
     },
     {
       "id": "dataset_adapter",
-      "label": "DatasetAdapter\n(Kaggle CFPB Chunk Ingestion)",
+      "label": "DatasetAdapter\n(CFPB SQLite Ingestion)",
       "type": "process",
-      "module": "domain_services"
+      "module": "service_tier"
+    },
+    {
+      "id": "telemetry_store",
+      "label": "TelemetryMetricStore\n(SQL Aggregation Seam)",
+      "type": "service",
+      "module": "service_tier"
+    },
+    {
+      "id": "anomaly_detector",
+      "label": "AnomalyDetector\n(Z-Score & Isolation Forest)",
+      "type": "process",
+      "module": "service_tier"
+    },
+    {
+      "id": "investigation_service",
+      "label": "InvestigationService\n(LangGraph Coordinator)",
+      "type": "service",
+      "module": "service_tier"
     },
     {
       "id": "ticket_vector_store",
       "label": "TicketVectorStore\n(Cosine Distance <=> Search)",
       "type": "vector_store",
-      "module": "domain_services"
+      "module": "service_tier"
     },
     {
       "id": "supervisor_agent",
-      "label": "Supervisor Agent\n(Triage & Hypothesis Planner)",
+      "label": "Supervisor Agent\n(Triage & Hypothesis)",
       "type": "agent",
-      "module": "agent_squad"
+      "module": "agent_tier"
     },
     {
       "id": "sql_analyst_agent",
       "label": "SQL Analyst Agent\n(Telemetry Query Specialist)",
       "type": "agent",
-      "module": "agent_squad"
+      "module": "agent_tier"
     },
     {
       "id": "support_vector_agent",
-      "label": "Support Vector Agent\n(CFPB Complaint Dispute Analyst)",
+      "label": "Support Vector Agent\n(CFPB Dispute Analyst)",
       "type": "agent",
-      "module": "agent_squad"
-    },
-    {
-      "id": "synthesizer_agent",
-      "label": "Synthesizer Agent\n(RCA Confidence & Evidence Synthesis)",
-      "type": "agent",
-      "module": "agent_squad"
+      "module": "agent_tier"
     },
     {
       "id": "sql_sandbox",
-      "label": "Read-Only SQL Sandbox\n(AST & Regex Guardrails • LIMIT 50)",
+      "label": "SQL AST Sandbox\n(Safe Read-Only Guardrails)",
       "type": "tool",
-      "module": "agent_squad"
+      "module": "agent_tier"
     },
     {
-      "id": "llm_client",
-      "label": "Async LLM Gateway (LLMClient)\n(Failover Cascade: 3.1-flash / lite)",
-      "type": "llm",
-      "module": "ai_gateway"
+      "id": "synthesizer_agent",
+      "label": "Synthesizer Agent\n(RCA Confidence & Verdict)",
+      "type": "agent",
+      "module": "agent_tier"
     },
     {
-      "id": "fastembed_engine",
-      "label": "FastEmbed ONNX Engine\n(bge-base-en-v1.5 • 768-dim)",
-      "type": "process",
-      "module": "ai_gateway"
+      "id": "redis_cache",
+      "label": "Redis 7 Cache\n(Telemetry Cache)",
+      "type": "memory",
+      "module": "infra_tier"
     },
     {
       "id": "postgres_db",
       "label": "PostgreSQL 16 Engine\n(Telemetry • Anomalies • Reports)",
       "type": "database",
-      "module": "storage_layer"
+      "module": "infra_tier"
     },
     {
       "id": "pgvector_store",
-      "label": "pgvector HNSW Index\n(support_tickets Cosine Index)",
+      "label": "pgvector (HNSW Index)\n(768-dim Vectors)",
       "type": "vector_store",
-      "module": "storage_layer"
+      "module": "infra_tier"
     },
     {
-      "id": "redis_cache",
-      "label": "Redis 7 Cache\n(Telemetry Cache & Pub/Sub)",
-      "type": "memory",
-      "module": "storage_layer"
+      "id": "fastembed_engine",
+      "label": "FastEmbed ONNX Engine\n(bge-base-en-v1.5)",
+      "type": "process",
+      "module": "infra_tier"
+    },
+    {
+      "id": "llm_client",
+      "label": "Async LLM Gateway (LLMClient)\n(Failover Cascade: 3.1-flash / lite)",
+      "type": "llm",
+      "module": "infra_tier"
     },
     {
       "id": "legend",
-      "label": "Legend:  gray = primary   orange = control   green = memory read/write   dashed = data/async stream   violet = feedback",
+      "label": "Legend:  gray = primary flow   orange = agent control   green = memory/data   violet = RCA feedback",
       "type": "text"
     }
   ],
@@ -150,7 +150,7 @@
       "from": "mission_control_ui",
       "to": "fastapi_gateway",
       "type": "primary",
-      "label": "REST Requests"
+      "label": "HTTP Requests"
     },
     {
       "id": "edge-2",
@@ -173,16 +173,16 @@
     {
       "id": "edge-5",
       "from": "investigations_route",
-      "to": "sse_event_source",
+      "to": "sse_client",
       "type": "data",
       "label": "SSE Stream"
     },
     {
       "id": "edge-6",
-      "from": "sse_event_source",
+      "from": "sse_client",
       "to": "mission_control_ui",
       "type": "primary",
-      "label": "Stream Updates"
+      "label": "Live Telemetry"
     },
     {
       "id": "edge-7",
@@ -205,136 +205,119 @@
     {
       "id": "edge-10",
       "from": "dataset_adapter",
-      "to": "fastembed_engine",
-      "type": "data"
-    },
-    {
-      "id": "edge-11",
-      "from": "dataset_adapter",
       "to": "postgres_db",
       "type": "memory_write"
     },
     {
-      "id": "edge-12",
+      "id": "edge-11",
       "from": "telemetry_store",
       "to": "postgres_db",
       "type": "memory_read"
     },
     {
-      "id": "edge-13",
+      "id": "edge-12",
       "from": "telemetry_store",
       "to": "redis_cache",
       "type": "memory_read"
     },
     {
-      "id": "edge-14",
+      "id": "edge-13",
       "from": "anomaly_detector",
       "to": "telemetry_store",
       "type": "data"
     },
     {
-      "id": "edge-15",
+      "id": "edge-14",
       "from": "anomaly_detector",
       "to": "postgres_db",
       "type": "memory_write"
     },
     {
-      "id": "edge-16",
+      "id": "edge-15",
       "from": "investigation_service",
       "to": "supervisor_agent",
-      "type": "control"
+      "type": "control",
+      "label": "Start Investigation"
     },
     {
-      "id": "edge-17",
+      "id": "edge-16",
       "from": "investigation_service",
       "to": "postgres_db",
       "type": "memory_write"
     },
     {
-      "id": "edge-18",
+      "id": "edge-17",
       "from": "supervisor_agent",
       "to": "sql_analyst_agent",
       "type": "control",
       "label": "Dispatch SQL"
     },
     {
-      "id": "edge-19",
+      "id": "edge-18",
       "from": "supervisor_agent",
       "to": "support_vector_agent",
       "type": "control",
       "label": "Dispatch Vector"
     },
     {
-      "id": "edge-20",
+      "id": "edge-19",
       "from": "sql_analyst_agent",
       "to": "sql_sandbox",
       "type": "primary"
     },
     {
-      "id": "edge-21",
+      "id": "edge-20",
       "from": "sql_sandbox",
       "to": "postgres_db",
       "type": "memory_read"
     },
     {
-      "id": "edge-22",
+      "id": "edge-21",
       "from": "support_vector_agent",
       "to": "ticket_vector_store",
       "type": "memory_read"
     },
     {
-      "id": "edge-23",
+      "id": "edge-22",
       "from": "ticket_vector_store",
       "to": "fastembed_engine",
       "type": "data"
     },
     {
-      "id": "edge-24",
+      "id": "edge-23",
       "from": "ticket_vector_store",
       "to": "pgvector_store",
       "type": "memory_read"
     },
     {
-      "id": "edge-25",
+      "id": "edge-24",
       "from": "sql_analyst_agent",
       "to": "synthesizer_agent",
       "type": "data",
-      "label": "Quantitative Facts"
+      "label": "SQL Facts"
     },
     {
-      "id": "edge-26",
+      "id": "edge-25",
       "from": "support_vector_agent",
       "to": "synthesizer_agent",
       "type": "data",
-      "label": "Qualitative Disputes"
+      "label": "Customer Disputes"
     },
     {
-      "id": "edge-27",
+      "id": "edge-26",
       "from": "synthesizer_agent",
       "to": "supervisor_agent",
       "type": "feedback",
       "label": "RCA Verdict"
     },
     {
-      "id": "edge-28",
+      "id": "edge-27",
       "from": "supervisor_agent",
       "to": "llm_client",
       "type": "data"
     },
     {
-      "id": "edge-29",
-      "from": "sql_analyst_agent",
-      "to": "llm_client",
-      "type": "data"
-    },
-    {
-      "id": "edge-30",
-      "from": "support_vector_agent",
-      "to": "llm_client",
-      "type": "data"
-    },
-    {
-      "id": "edge-31",
+      "id": "edge-28",
       "from": "synthesizer_agent",
       "to": "llm_client",
       "type": "data"
@@ -342,28 +325,24 @@
   ],
   "modules": [
     {
-      "id": "client_layer",
-      "label": "Client & Presentation Layer"
+      "id": "client_tier",
+      "label": "Client & Presentation Tier"
     },
     {
-      "id": "api_layer",
-      "label": "FastAPI Async Web Gateway & Routing"
+      "id": "api_tier",
+      "label": "FastAPI Gateway & Route Adapters"
     },
     {
-      "id": "domain_services",
-      "label": "Core Domain Services & Seams"
+      "id": "service_tier",
+      "label": "Core Domain Services & Ingestion Seam"
     },
     {
-      "id": "agent_squad",
+      "id": "agent_tier",
       "label": "LangGraph Multi-Agent Investigation Squad"
     },
     {
-      "id": "ai_gateway",
-      "label": "Local FastEmbed & Async Multi-Model LLM Gateway"
-    },
-    {
-      "id": "storage_layer",
-      "label": "Persistence & Infrastructure Tier"
+      "id": "infra_tier",
+      "label": "Persistence & AI Infrastructure Tier"
     }
   ]
 }

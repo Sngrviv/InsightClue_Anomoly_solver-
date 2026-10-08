@@ -1,153 +1,211 @@
 meta:
   profile: default
   theme: arch-dark
-  layout: hierarchical
-  title: 'InsightClue Enterprise Architecture: Autonomous Multi-Agent FinTech Anomaly & RCA Engine'
-  description: >-
-    End-to-End System Architecture: FastAPI, Deep Domain Services, LangGraph Autonomous Squad, LLM Gateway Cascade,
-    pgvector, and PostgreSQL 16
+  layout: horizontal
+  canvas: 1440x920
+  title: InsightClue Enterprise Architecture
+  description: Autonomous Multi-Agent FinTech Anomaly Detection & RCA Engine
 nodes:
   - id: mission_control_ui
     label: |-
-      Mission Control UI
+      Mission Control Dashboard
       (Vanilla JS • CSS3 • Chart.js)
     type: user
-    module: client_layer
-  - id: sse_event_source
+    module: client_tier
+    position:
+      x: 440
+      'y': 70
+  - id: sse_client
     label: |-
-      SSE EventSource
-      (Real-Time Stream Consumer)
+      SSE EventSource Client
+      (Real-Time Agent Stream)
     type: user
-    module: client_layer
+    module: client_tier
+    position:
+      x: 880
+      'y': 70
   - id: fastapi_gateway
     label: |-
       FastAPI Gateway
-      (Python 3.13 • ASGI • Uvicorn)
+      (Python 3.13 • ASGI)
     type: gateway
-    module: api_layer
+    module: api_tier
+    position:
+      x: 180
+      'y': 190
   - id: metrics_route
     label: |-
       Metrics Route
       (/api/metrics)
     type: service
-    module: api_layer
+    module: api_tier
+    position:
+      x: 440
+      'y': 190
   - id: anomalies_route
     label: |-
       Anomalies Route
       (/api/anomalies)
     type: service
-    module: api_layer
+    module: api_tier
+    position:
+      x: 700
+      'y': 190
   - id: investigations_route
     label: |-
       Investigations Route
       (/api/investigations)
     type: service
-    module: api_layer
-  - id: telemetry_store
-    label: |-
-      TelemetryMetricStore
-      (SQL Aggregations & Date Grouping)
-    type: service
-    module: domain_services
-  - id: anomaly_detector
-    label: |-
-      AnomalyDetector Engine
-      (Rolling Z-Score & Isolation Forest)
-    type: process
-    module: domain_services
-  - id: investigation_service
-    label: |-
-      InvestigationService
-      (State Coordinator & SSE Emitter)
-    type: service
-    module: domain_services
+    module: api_tier
+    position:
+      x: 1000
+      'y': 190
   - id: dataset_adapter
     label: |-
       DatasetAdapter
-      (Kaggle CFPB Chunk Ingestion)
+      (CFPB SQLite Ingestion)
     type: process
-    module: domain_services
+    module: service_tier
+    position:
+      x: 150
+      'y': 340
+  - id: telemetry_store
+    label: |-
+      TelemetryMetricStore
+      (SQL Aggregation Seam)
+    type: service
+    module: service_tier
+    position:
+      x: 420
+      'y': 340
+  - id: anomaly_detector
+    label: |-
+      AnomalyDetector
+      (Z-Score & Isolation Forest)
+    type: process
+    module: service_tier
+    position:
+      x: 700
+      'y': 340
+  - id: investigation_service
+    label: |-
+      InvestigationService
+      (LangGraph Coordinator)
+    type: service
+    module: service_tier
+    position:
+      x: 990
+      'y': 340
   - id: ticket_vector_store
     label: |-
       TicketVectorStore
       (Cosine Distance <=> Search)
     type: vector_store
-    module: domain_services
+    module: service_tier
+    position:
+      x: 1270
+      'y': 340
   - id: supervisor_agent
     label: |-
       Supervisor Agent
-      (Triage & Hypothesis Planner)
+      (Triage & Hypothesis)
     type: agent
-    module: agent_squad
+    module: agent_tier
+    position:
+      x: 250
+      'y': 520
   - id: sql_analyst_agent
     label: |-
       SQL Analyst Agent
       (Telemetry Query Specialist)
     type: agent
-    module: agent_squad
+    module: agent_tier
+    position:
+      x: 550
+      'y': 460
   - id: support_vector_agent
     label: |-
       Support Vector Agent
-      (CFPB Complaint Dispute Analyst)
+      (CFPB Dispute Analyst)
     type: agent
-    module: agent_squad
+    module: agent_tier
+    position:
+      x: 550
+      'y': 580
+  - id: sql_sandbox
+    label: |-
+      SQL AST Sandbox
+      (Safe Read-Only Guardrails)
+    type: tool
+    module: agent_tier
+    position:
+      x: 840
+      'y': 460
   - id: synthesizer_agent
     label: |-
       Synthesizer Agent
-      (RCA Confidence & Evidence Synthesis)
+      (RCA Confidence & Verdict)
     type: agent
-    module: agent_squad
-  - id: sql_sandbox
+    module: agent_tier
+    position:
+      x: 1140
+      'y': 520
+  - id: redis_cache
     label: |-
-      Read-Only SQL Sandbox
-      (AST & Regex Guardrails • LIMIT 50)
-    type: tool
-    module: agent_squad
-  - id: llm_client
-    label: |-
-      Async LLM Gateway (LLMClient)
-      (Failover Cascade: 3.1-flash / lite)
-    type: llm
-    module: ai_gateway
-  - id: fastembed_engine
-    label: |-
-      FastEmbed ONNX Engine
-      (bge-base-en-v1.5 • 768-dim)
-    type: process
-    module: ai_gateway
+      Redis 7 Cache
+      (Telemetry Cache)
+    type: memory
+    module: infra_tier
+    position:
+      x: 150
+      'y': 720
   - id: postgres_db
     label: |-
       PostgreSQL 16 Engine
       (Telemetry • Anomalies • Reports)
     type: database
-    module: storage_layer
+    module: infra_tier
+    position:
+      x: 440
+      'y': 720
   - id: pgvector_store
     label: |-
-      pgvector HNSW Index
-      (support_tickets Cosine Index)
+      pgvector (HNSW Index)
+      (768-dim Vectors)
     type: vector_store
-    module: storage_layer
-  - id: redis_cache
+    module: infra_tier
+    position:
+      x: 740
+      'y': 720
+  - id: fastembed_engine
     label: |-
-      Redis 7 Cache
-      (Telemetry Cache & Pub/Sub)
-    type: memory
-    module: storage_layer
+      FastEmbed ONNX Engine
+      (bge-base-en-v1.5)
+    type: process
+    module: infra_tier
+    position:
+      x: 1000
+      'y': 720
+  - id: llm_client
+    label: |-
+      Async LLM Gateway (LLMClient)
+      (Failover Cascade: 3.1-flash / lite)
+    type: llm
+    module: infra_tier
+    position:
+      x: 1270
+      'y': 720
   - id: legend
-    label: >-
-      Legend:  gray = primary   orange = control   green = memory read/write   dashed = data/async stream   violet =
-      feedback
+    label: 'Legend:  gray = primary flow   orange = agent control   green = memory/data   violet = RCA feedback'
     type: text
-    bounds:
-      x: 100
-      'y': 950
-      width: 900
-      height: 36
+    position:
+      x: 700
+      'y': 840
 edges:
   - from: mission_control_ui
     to: fastapi_gateway
     type: primary
-    label: REST Requests
+    label: HTTP Requests
   - from: fastapi_gateway
     to: metrics_route
     type: primary
@@ -158,13 +216,13 @@ edges:
     to: investigations_route
     type: primary
   - from: investigations_route
-    to: sse_event_source
+    to: sse_client
     type: data
     label: SSE Stream
-  - from: sse_event_source
+  - from: sse_client
     to: mission_control_ui
     type: primary
-    label: Stream Updates
+    label: Live Telemetry
   - from: metrics_route
     to: telemetry_store
     type: primary
@@ -174,9 +232,6 @@ edges:
   - from: investigations_route
     to: investigation_service
     type: primary
-  - from: dataset_adapter
-    to: fastembed_engine
-    type: data
   - from: dataset_adapter
     to: postgres_db
     type: memory_write
@@ -195,6 +250,7 @@ edges:
   - from: investigation_service
     to: supervisor_agent
     type: control
+    label: Start Investigation
   - from: investigation_service
     to: postgres_db
     type: memory_write
@@ -224,11 +280,11 @@ edges:
   - from: sql_analyst_agent
     to: synthesizer_agent
     type: data
-    label: Quantitative Facts
+    label: SQL Facts
   - from: support_vector_agent
     to: synthesizer_agent
     type: data
-    label: Qualitative Disputes
+    label: Customer Disputes
   - from: synthesizer_agent
     to: supervisor_agent
     type: feedback
@@ -236,25 +292,42 @@ edges:
   - from: supervisor_agent
     to: llm_client
     type: data
-  - from: sql_analyst_agent
-    to: llm_client
-    type: data
-  - from: support_vector_agent
-    to: llm_client
-    type: data
   - from: synthesizer_agent
     to: llm_client
     type: data
 modules:
-  - id: client_layer
-    label: Client & Presentation Layer
-  - id: api_layer
-    label: FastAPI Async Web Gateway & Routing
-  - id: domain_services
-    label: Core Domain Services & Seams
-  - id: agent_squad
+  - id: client_tier
+    label: Client & Presentation Tier
+    style:
+      fillColor: none
+      strokeColor: '#334155'
+      dashed: true
+      dashPattern: 6 4
+  - id: api_tier
+    label: FastAPI Gateway & Route Adapters
+    style:
+      fillColor: none
+      strokeColor: '#334155'
+      dashed: true
+      dashPattern: 6 4
+  - id: service_tier
+    label: Core Domain Services & Ingestion Seam
+    style:
+      fillColor: none
+      strokeColor: '#334155'
+      dashed: true
+      dashPattern: 6 4
+  - id: agent_tier
     label: LangGraph Multi-Agent Investigation Squad
-  - id: ai_gateway
-    label: Local FastEmbed & Async Multi-Model LLM Gateway
-  - id: storage_layer
-    label: Persistence & Infrastructure Tier
+    style:
+      fillColor: none
+      strokeColor: '#334155'
+      dashed: true
+      dashPattern: 6 4
+  - id: infra_tier
+    label: Persistence & AI Infrastructure Tier
+    style:
+      fillColor: none
+      strokeColor: '#334155'
+      dashed: true
+      dashPattern: 6 4
