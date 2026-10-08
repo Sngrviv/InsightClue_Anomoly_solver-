@@ -84,7 +84,7 @@ class InvestigationGraphBuilder:
             "Formulate hypothesis and select next_agent."
         )
 
-        resp = self.llm.generate_json(user_prompt, system_prompt=system_prompt)
+        resp = await self.llm.agenerate_json(user_prompt, system_prompt=system_prompt)
         next_target = resp.get("next_agent", default_next)
         if next_target not in ("sql_agent", "rag_agent", "synthesis_agent"):
             next_target = default_next
@@ -124,7 +124,7 @@ class InvestigationGraphBuilder:
             "Generate a targeted read-only SELECT query."
         )
 
-        resp = self.llm.generate_json(user_prompt, system_prompt=system_prompt)
+        resp = await self.llm.agenerate_json(user_prompt, system_prompt=system_prompt)
 
         # Dynamic default query targeting active metrics
         region = state.get("region", "West")
@@ -184,7 +184,7 @@ class InvestigationGraphBuilder:
             "Formulate a concise semantic search query to find matching customer complaints."
         )
 
-        resp = self.llm.generate_json(user_prompt, system_prompt=system_prompt)
+        resp = await self.llm.agenerate_json(user_prompt, system_prompt=system_prompt)
         query = resp.get("semantic_query", f"{state.get('product_name')} {state.get('region')} {state.get('metric_name')}")
 
         citations = await self.vector_store.search_citations(
@@ -240,7 +240,7 @@ class InvestigationGraphBuilder:
             "Produce the final executive RCA report."
         )
 
-        resp = self.llm.generate_json(user_prompt, system_prompt=system_prompt)
+        resp = await self.llm.agenerate_json(user_prompt, system_prompt=system_prompt)
 
         metric = state.get("metric_name", "metric_deviation")
         region = state.get("region", "Region")

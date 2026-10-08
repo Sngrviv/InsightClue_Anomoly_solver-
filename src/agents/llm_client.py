@@ -1,6 +1,7 @@
 """
 Unified LLM Client for InsightClue Multi-Agent Investigation.
 100% API-driven execution via Google GenAI SDK with multi-model resilience.
+Provides both synchronous and native non-blocking asynchronous generation.
 Zero synthetic mock strings or hardcoded fallbacks.
 """
 
@@ -25,6 +26,7 @@ CANDIDATE_MODELS = [
 class LLMClient:
     """
     Unified, 100% API-driven LLM Client providing structured text and JSON generation.
+    Supports synchronous and native async execution with automatic multi-model failover.
     """
 
     def __init__(self) -> None:
@@ -41,8 +43,7 @@ class LLMClient:
 
     def generate_text(self, prompt: str, system_prompt: str | None = None) -> str:
         """
-        Generates text response directly from Google GenAI API with model cascading.
-        Raises RuntimeError if the API cannot be reached.
+        Generates text response directly from Google GenAI API with model cascading (synchronous).
         """
         if not self._gemini_client:
             raise RuntimeError(
@@ -51,7 +52,6 @@ class LLMClient:
 
         full_prompt = f"System: {system_prompt}\n\nUser: {prompt}" if system_prompt else prompt
 
-        # Try configured primary model first, followed by candidate cascade
         models_to_try = [self.settings.GEMINI_LLM_MODEL] + [
             m for m in CANDIDATE_MODELS if m != self.settings.GEMINI_LLM_MODEL
         ]
@@ -75,10 +75,43 @@ class LLMClient:
         logger.error("[LLMClient] %s", error_msg)
         raise RuntimeError(error_msg)
 
+    async def agenerate_text(self, prompt: str, system_prompt: str | None = None) -> str:
+        """
+        Generates text response non-blockingly via Google GenAI async client with model cascading.
+        """
+        if not self._gemini_client:
+            raise RuntimeError(
+                "GEMINI_API_KEY is required for LLM reasoning. Please set GEMINI_API_KEY in your .env file."
+            )
+
+        full_prompt = f"System: {system_prompt}\n\nUser: {prompt}" if system_prompt else prompt
+
+        models_to_try = [self.settings.GEMINI_LLM_MODEL] + [
+            m for m in CANDIDATE_MODELS if m != self.settings.GEMINI_LLM_MODEL
+        ]
+
+        last_error: Exception | None = None
+
+        for model_name in models_to_try:
+            try:
+                response = await self._gemini_client.aio.models.generate_content(
+                    model=model_name,
+                    contents=full_prompt,
+                )
+                if response and response.text:
+                    return response.text.strip()
+            except Exception as e:
+                last_error = e
+                logger.debug("[LLMClient-Async] Model %s failed (%s). Trying next candidate...", model_name, e)
+                continue
+
+        error_msg = f"All async API models failed to generate response. Last error: {last_error}"
+        logger.error("[LLMClient-Async] %s", error_msg)
+        raise RuntimeError(error_msg)
+
     def generate_json(self, prompt: str, system_prompt: str | None = None) -> dict[str, Any]:
         """
-        Generates structured JSON dictionary response via API.
-        Enforces JSON schema validation and extracts from markdown blocks.
+        Generates structured JSON dictionary response synchronously.
         """
         augmented_system = (
             (system_prompt or "")
@@ -86,6 +119,18 @@ class LLMClient:
         )
 
         raw_response = self.generate_text(prompt, system_prompt=augmented_system)
+        return self._clean_and_parse_json(raw_response)
+
+    async def agenerate_json(self, prompt: str, system_prompt: str | None = None) -> dict[str, Any]:
+        """
+        Generates structured JSON dictionary response asynchronously.
+        """
+        augmented_system = (
+            (system_prompt or "")
+            + "\nCRITICAL: Respond ONLY with valid, parseable JSON matching the requested schema. Do not include introductory text."
+        )
+
+        raw_response = await self.agenerate_text(prompt, system_prompt=augmented_system)
         return self._clean_and_parse_json(raw_response)
 
     def _clean_and_parse_json(self, raw_text: str) -> dict[str, Any]:
