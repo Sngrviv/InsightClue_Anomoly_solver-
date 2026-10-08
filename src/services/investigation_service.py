@@ -104,10 +104,10 @@ class InvestigationService:
         anomaly.status = "RESOLVED"
 
         raw_rca = final_state.get("root_cause_summary", "Detailed RCA established.")
-        rca_summary = "\n".join(raw_rca) if isinstance(raw_rca, list) else str(raw_rca)
+        rca_summary = "\n".join(m if isinstance(m, str) else str(m) for m in raw_rca) if isinstance(raw_rca, list) else str(raw_rca)
 
         raw_mitigation = final_state.get("mitigation_steps", "1. Audit telemetry alerts.")
-        mitigation = "\n".join(raw_mitigation) if isinstance(raw_mitigation, list) else str(raw_mitigation)
+        mitigation = "\n".join(m if isinstance(m, str) else str(m) for m in raw_mitigation) if isinstance(raw_mitigation, list) else str(raw_mitigation)
 
         # Create and persist finalized InvestigationReport
         report = InvestigationReport(

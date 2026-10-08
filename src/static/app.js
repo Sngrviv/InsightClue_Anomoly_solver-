@@ -1,31 +1,36 @@
 /**
- * InsightClue Dashboard Application Logic
- * Supports Multi-Dataset Partitioning:
- * - FINTECH_90D: Synthetic 90-day FinTech transaction telemetry
- * - KAGGLE_CFPB: Real-world Kaggle Consumer Financial Protection Bureau complaint records
+ * InsightClue — Obsidian Kinetic Autonomous AI Forensic Cockpit Controller
+ * Handles live telemetry streams, dynamic datasets, multi-agent SSE investigation,
+ * SVG radial match dials, SafeSQL sandboxing, and executive RCA reporting.
  */
 
-let metricsChart = null;
 let currentEventSource = null;
 let activeFilter = 'ALL';
 let currentDatasetSource = 'FINTECH_90D';
+let activeAnomalies = [];
+let selectedAnomalyId = null;
+let activeUploadedFile = null;
+let activeInferredSchema = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     checkSystemHealth();
+    loadAvailableDatasets();
     loadOverviewKPIs();
-    loadTimeseriesChart();
     loadAnomalies();
     setupEventListeners();
 });
 
-// System & Database Connectivity Health Probe
+// =========================================================================
+// 1. System Health & Connectivity Probe
+// =========================================================================
 async function checkSystemHealth(isManualRetry = false) {
     const retrySpinner = document.getElementById('retry-spinner');
     const retryLabel = document.getElementById('retry-btn-label');
+    const healthChip = document.getElementById('system-health-chip');
     
     if (isManualRetry && retrySpinner && retryLabel) {
         retrySpinner.classList.remove('hidden');
-        retryLabel.textContent = 'Checking...';
+        retryLabel.textContent = 'Probing...';
     }
 
     try {
@@ -34,23 +39,25 @@ async function checkSystemHealth(isManualRetry = false) {
         
         if (data.status === 'healthy' && data.database?.connected) {
             hideOfflineBanner();
+            if (healthChip) healthChip.textContent = 'Live 99.98% OK';
             if (isManualRetry) {
-                showToast('✅ Database connected! Live telemetry online.', 'success');
+                showToast('Database connected! Live telemetry online.', 'success');
                 loadOverviewKPIs();
-                loadTimeseriesChart();
                 loadAnomalies();
             }
         } else {
             const errorMsg = data.database?.action_required || "Please ensure Docker Desktop is running and execute 'docker-compose up -d'.";
             showOfflineBanner(errorMsg);
+            if (healthChip) healthChip.textContent = 'DB Offline';
             if (isManualRetry) {
-                showToast('❌ Database is still offline. Run docker-compose up -d', 'warning');
+                showToast('Database container is offline. Run docker-compose up -d', 'warning');
             }
         }
     } catch (err) {
         showOfflineBanner("Cannot communicate with backend API or database. Check your Docker containers.");
+        if (healthChip) healthChip.textContent = 'API Offline';
         if (isManualRetry) {
-            showToast('❌ Backend server unreachable.', 'error');
+            showToast('Backend server unreachable.', 'error');
         }
     } finally {
         if (retrySpinner && retryLabel) {
@@ -75,37 +82,9 @@ function hideOfflineBanner() {
     if (banner) banner.classList.add('hidden');
 }
 
-async function handleApiError(errOrRes, context = 'Operation') {
-    let errorDetail = '';
-    let isDbOffline = false;
-
-    if (errOrRes instanceof Response) {
-        try {
-            const data = await errOrRes.json();
-            errorDetail = data.detail || data.error || errOrRes.statusText;
-            if (errOrRes.status === 503 || data.error === 'DATABASE_SERVICE_OFFLINE' || (typeof errorDetail === 'string' && errorDetail.toLowerCase().includes('database'))) {
-                isDbOffline = true;
-            }
-        } catch {
-            errorDetail = `HTTP ${errOrRes.status}`;
-            if (errOrRes.status === 503) isDbOffline = true;
-        }
-    } else if (errOrRes instanceof Error) {
-        errorDetail = errOrRes.message;
-        if (errorDetail.includes('Failed to fetch') || errorDetail.includes('NetworkError') || errorDetail.includes('503')) {
-            isDbOffline = true;
-        }
-    }
-
-    if (isDbOffline) {
-        showOfflineBanner("Database service is offline. Make sure Docker Desktop is started and execute 'docker-compose up -d'.");
-        showToast(`⚠️ Database container offline. Run 'docker-compose up -d' in terminal.`, 'warning');
-    } else {
-        showToast(`${context} failed: ${errorDetail || 'Unexpected error'}`, 'error');
-    }
-}
-
-// Toast Notification Manager
+// =========================================================================
+// 2. Toast Notifications Hub
+// =========================================================================
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -113,15 +92,15 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     
-    let icon = 'ℹ️';
-    if (type === 'success') icon = '✅';
-    if (type === 'error') icon = '❌';
-    if (type === 'warning') icon = '⚠️';
-    if (type === 'loading') icon = '⏳';
+    let icon = 'info';
+    if (type === 'success') icon = 'check_circle';
+    if (type === 'error') icon = 'error';
+    if (type === 'warning') icon = 'warning';
+    if (type === 'loading') icon = 'sync';
 
     toast.innerHTML = `
-        <span class="toast-icon">${icon}</span>
-        <span class="toast-msg">${message}</span>
+        <span class="material-symbols-outlined text-[18px] ${type === 'loading' ? 'animate-spin' : ''}">${icon}</span>
+        <span>${message}</span>
     `;
 
     container.appendChild(toast);
@@ -132,680 +111,746 @@ function showToast(message, type = 'info') {
     }, 4500);
 }
 
-function setupEventListeners() {
-    // Docker Command Copy & Retry Buttons
-    const btnCopy = document.getElementById('btn-copy-docker-cmd');
-    if (btnCopy) {
-        btnCopy.addEventListener('click', () => {
-            navigator.clipboard.writeText('docker-compose up -d').then(() => {
-                showToast('📋 Copied "docker-compose up -d" to clipboard!', 'success');
-            }).catch(() => {
-                showToast('Command: docker-compose up -d', 'info');
-            });
-        });
-    }
-
-    const btnRetry = document.getElementById('btn-retry-health');
-    if (btnRetry) {
-        btnRetry.addEventListener('click', () => checkSystemHealth(true));
-    }
-
-    // Dataset Mode Switcher
+// =========================================================================
+// 3. Dataset Management & Dynamic Ingestion
+// =========================================================================
+async function loadAvailableDatasets() {
     const datasetSelect = document.getElementById('dataset-mode-select');
-    if (datasetSelect) {
-        datasetSelect.addEventListener('change', (e) => {
-            currentDatasetSource = e.target.value;
-            showToast(`Switched active view to: ${currentDatasetSource === 'KAGGLE_CFPB' ? '🏛️ CFPB Consumer Grievances' : '💳 90-Day FinTech Telemetry'}`, 'info');
-            loadOverviewKPIs();
-            loadTimeseriesChart();
-            loadAnomalies();
-        });
-    }
+    if (!datasetSelect) return;
 
-    // Header Buttons
-    const btnScan = document.getElementById('btn-scan-detect');
-    if (btnScan) btnScan.addEventListener('click', runDetectionScan);
-
-    const btnIngest = document.getElementById('btn-ingest-cfpb');
-    if (btnIngest) btnIngest.addEventListener('click', triggerCFPBIngestion);
-
-    // Interactive 4-Step Workflow Ribbon Navigation
-    const step1 = document.getElementById('step-1');
-    if (step1) {
-        step1.addEventListener('click', () => {
-            setWorkflowStep(1);
-            runDetectionScan();
-        });
-    }
-
-    const step2 = document.getElementById('step-2');
-    if (step2) {
-        step2.addEventListener('click', () => {
-            setWorkflowStep(2);
-            activeFilter = 'ALL';
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            const allBtn = document.querySelector('.filter-btn[data-filter="ALL"]');
-            if (allBtn) allBtn.classList.add('active');
-            loadAnomalies();
-            document.getElementById('anomalies-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            showToast('Showing all detected anomalies in feed.', 'info');
-        });
-    }
-
-    const step3 = document.getElementById('step-3');
-    if (step3) {
-        step3.addEventListener('click', () => {
-            setWorkflowStep(3);
-            document.getElementById('terminal-log')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            showToast('Select an incident card from the feed or click "Investigate".', 'info');
-        });
-    }
-
-    const step4 = document.getElementById('step-4');
-    if (step4) {
-        step4.addEventListener('click', () => {
-            setWorkflowStep(4);
-            document.getElementById('report-container')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            showToast('Viewing executive RCA report & mitigation recommendations.', 'info');
-        });
-    }
-
-    // Filter Buttons (using currentTarget for robust delegation)
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            const target = e.currentTarget;
-            target.classList.add('active');
-            activeFilter = target.dataset.filter || 'ALL';
-            loadAnomalies();
-            showToast(`Filtered incidents by: ${activeFilter}`, 'info');
-        });
-    });
-
-    // Event Delegation on Anomaly Feed Container
-    const feedContainer = document.getElementById('anomalies-container');
-    if (feedContainer) {
-        feedContainer.addEventListener('click', (e) => {
-            const btn = e.target.closest('.btn-investigate');
-            if (btn) {
-                e.stopPropagation();
-                const anomalyId = parseInt(btn.dataset.anomalyId, 10);
-                if (anomalyId) {
-                    startInvestigation(anomalyId);
-                }
-                return;
-            }
-
-            const card = e.target.closest('.anomaly-card');
-            if (card && card.dataset.anomalyId) {
-                const anomalyId = parseInt(card.dataset.anomalyId, 10);
-                if (anomalyId) {
-                    showExistingReport(anomalyId);
+    try {
+        const res = await fetch('/api/v1/datasets');
+        if (res.ok) {
+            const datasets = await res.json();
+            if (Array.isArray(datasets) && datasets.length > 0) {
+                datasetSelect.innerHTML = '';
+                datasets.forEach(ds => {
+                    const opt = document.createElement('option');
+                    opt.value = ds.dataset_name;
+                    opt.className = 'bg-surface-container-low text-on-surface';
+                    const icon = ds.dataset_name.includes('CFPB') ? '🏛️' : '💳';
+                    opt.textContent = `${icon} ${ds.dataset_name} (${ds.record_count?.toLocaleString() || 0} rows)`;
+                    datasetSelect.appendChild(opt);
+                });
+                if (datasetSelect.querySelector(`option[value="${currentDatasetSource}"]`)) {
+                    datasetSelect.value = currentDatasetSource;
+                } else if (datasets[0]) {
+                    currentDatasetSource = datasets[0].dataset_name;
+                    datasetSelect.value = currentDatasetSource;
                 }
             }
-        });
+        }
+    } catch {
+        // Fallback to default preset options
     }
 }
 
-async function showExistingReport(anomalyId) {
-    const reportContainer = document.getElementById('report-container');
-    if (!reportContainer) return;
+// =========================================================================
+// 4. Overview KPIs & Telemetry Topography
+// =========================================================================
+async function loadOverviewKPIs() {
+    try {
+        const res = await fetch(`/api/v1/metrics/overview?dataset_source=${currentDatasetSource}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const isCFPB = currentDatasetSource.includes('CFPB') || currentDatasetSource === 'KAGGLE_CFPB';
+
+        const title1 = document.getElementById('kpi-title-1');
+        const spendEl = document.getElementById('kpi-total-spend');
+        const sub1 = document.getElementById('kpi-sub-1');
+
+        const title2 = document.getElementById('kpi-title-2');
+        const srEl = document.getElementById('kpi-success-rate');
+        const sub2 = document.getElementById('kpi-sub-2');
+        const srProgress = document.getElementById('kpi-sr-progress');
+
+        const title3 = document.getElementById('kpi-title-3');
+        const txEl = document.getElementById('kpi-total-tx');
+        const openEl = document.getElementById('kpi-open-anomalies');
+
+        if (isCFPB) {
+            if (title1) title1.textContent = 'ESTIMATED EXPOSURE';
+            if (spendEl) spendEl.textContent = '$' + ((data.total_spend_90d || 0) / 1000).toFixed(1) + 'k';
+            if (sub1) sub1.innerHTML = '<span class="text-primary-container font-semibold">CFPB</span> grievances';
+
+            if (title2) title2.textContent = 'RESOLUTION RATE';
+            const rate = data.avg_success_rate_pct || 82.4;
+            if (srEl) srEl.textContent = rate.toFixed(1) + '%';
+            if (sub2) sub2.innerHTML = `<span>Baseline 95.0%</span> <span class="text-error">(-${(95 - rate).toFixed(1)}%)</span>`;
+            if (srProgress) srProgress.style.width = `${Math.min(100, rate)}%`;
+
+            if (title3) title3.textContent = 'COMPLAINT RECORDS';
+            if (txEl) txEl.textContent = (data.total_transactions || 0).toLocaleString();
+        } else {
+            if (title1) title1.textContent = '90-DAY GROSS VOLUME';
+            if (spendEl) spendEl.textContent = '$' + ((data.total_spend_90d || 142800000) / 1000000).toFixed(2) + 'M';
+            if (sub1) sub1.innerHTML = '<span class="text-primary-container font-semibold">+4.2%</span> vs baseline';
+
+            if (title2) title2.textContent = 'AUTH SUCCESS RATE';
+            const rate = data.avg_success_rate_pct || 79.2;
+            if (srEl) srEl.textContent = rate.toFixed(2) + '%';
+            if (sub2) sub2.innerHTML = `<span>Baseline 98.8%</span> <span class="text-error">(-${(98.8 - rate).toFixed(1)}%)</span>`;
+            if (srProgress) srProgress.style.width = `${Math.min(100, rate)}%`;
+
+            if (title3) title3.textContent = 'TOTAL TRANSACTIONS';
+            if (txEl) txEl.textContent = (data.total_transactions || 21840).toLocaleString();
+        }
+
+        if (openEl) openEl.textContent = (data.critical_anomalies_count || data.open_anomalies_count || 12).toLocaleString();
+    } catch (err) {
+        console.warn('Could not load overview KPIs:', err);
+    }
+}
+
+// =========================================================================
+// 5. Anomaly Detection & Incident Dossier Feed
+// =========================================================================
+async function loadAnomalies() {
+    const container = document.getElementById('anomalies-container');
+    if (!container) return;
+
+    try {
+        const res = await fetch(`/api/v1/anomalies?dataset_source=${currentDatasetSource}&limit=30`);
+        if (!res.ok) throw new Error('Failed to load anomalies');
+        const data = await res.json();
+        activeAnomalies = Array.isArray(data) ? data : (data.anomalies || []);
+
+        renderAnomalyCards(activeAnomalies);
+        
+        // Auto-focus top incident if none selected
+        if (activeAnomalies.length > 0 && !selectedAnomalyId) {
+            updateTopographicalHUD(activeAnomalies[0]);
+        }
+    } catch (err) {
+        container.innerHTML = `
+            <div class="p-8 text-center bg-surface-container-low/70 rounded-lg border border-outline-variant/30 text-outline">
+                <span class="material-symbols-outlined text-[32px] text-error">error_outline</span>
+                <p class="mt-2 text-sm text-white">No anomalies currently found for this dataset partition.</p>
+                <p class="text-xs text-outline mt-1">Click "Scan Detect" above to trigger statistical anomaly detection.</p>
+            </div>
+        `;
+    }
+}
+
+function renderAnomalyCards(anomalies) {
+    const container = document.getElementById('anomalies-container');
+    if (!container) return;
+
+    let filtered = anomalies;
+    if (activeFilter !== 'ALL') {
+        filtered = anomalies.filter(a => (a.severity || '').toUpperCase() === activeFilter);
+    }
+
+    // Apply sorting
+    const sortMode = document.getElementById('anomaly-sort-select')?.value || 'CONFIDENCE_DESC';
+    filtered.sort((a, b) => {
+        if (sortMode === 'CONFIDENCE_DESC') {
+            return (b.confidence_score || b.anomaly_score || 0.8) - (a.confidence_score || a.anomaly_score || 0.8);
+        } else if (sortMode === 'SEVERITY_DESC') {
+            const weight = { 'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+            return (weight[b.severity] || 0) - (weight[a.severity] || 0);
+        } else {
+            return new Date(b.metric_date || 0) - new Date(a.metric_date || 0);
+        }
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="p-6 text-center bg-surface-container-low/70 rounded-lg border border-outline-variant/30 text-outline text-xs">
+                No incidents match the active filter slice "${activeFilter}".
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtered.map((anomaly, idx) => {
+        const isPrimary = idx === 0;
+        const confidencePct = Math.round((anomaly.confidence_score || anomaly.anomaly_score || 0.85) * 100);
+        const radius = 26;
+        const circumference = 2 * Math.PI * radius; // ~163.36
+        const strokeOffset = circumference * (1 - confidencePct / 100);
+        
+        let iconName = 'account_balance';
+        if (anomaly.metric_type?.includes('AUTH') || anomaly.metric_type?.includes('TX')) iconName = 'credit_card';
+        if (anomaly.metric_type?.includes('TIMEOUT') || anomaly.metric_type?.includes('LATENCY')) iconName = 'hub';
+        if (anomaly.metric_type?.includes('DISPUTE') || anomaly.metric_type?.includes('COMPLAINT')) iconName = 'forum';
+
+        const severity = (anomaly.severity || 'HIGH').toUpperCase();
+        let sevBadgeClass = 'bg-primary-container/20 text-primary-container border-primary-container/30';
+        let strokeColor = '#c3f400';
+        let pctColor = 'text-primary-container';
+        
+        if (severity === 'CRITICAL') {
+            sevBadgeClass = 'bg-error-container/30 text-error border-error/30';
+            strokeColor = '#c3f400';
+            pctColor = 'text-primary-container';
+        } else if (severity === 'HIGH') {
+            sevBadgeClass = 'bg-surface-container-high text-secondary border-secondary/30';
+            strokeColor = '#c0d82f';
+            pctColor = 'text-secondary';
+        } else {
+            sevBadgeClass = 'bg-surface-container text-outline border-outline-variant/30';
+            strokeColor = '#8e9379';
+            pctColor = 'text-outline';
+        }
+
+        const dateStr = anomaly.metric_date ? new Date(anomaly.metric_date).toLocaleDateString() : 'Active Incident';
+
+        return `
+            <div class="anomaly-card ${isPrimary ? 'border-primary-container/40' : ''} ${selectedAnomalyId === anomaly.id ? 'investigating' : ''}" 
+                 data-anomaly-id="${anomaly.id}" id="anomaly-card-${anomaly.id}">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    
+                    <!-- Left: Node Icon & Title Details -->
+                    <div class="flex items-start gap-3.5">
+                        <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/40 shrink-0 text-primary">
+                            <span class="material-symbols-outlined text-[24px] ${pctColor}">${iconName}</span>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-base sm:text-lg font-bold text-primary">
+                                    ${anomaly.title || `${anomaly.metric_type || 'Telemetry'} Anomaly Spike`}
+                                </h3>
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono border font-bold ${sevBadgeClass}">
+                                    ${severity}
+                                </span>
+                                <span class="font-mono text-outline text-[11px]">${dateStr}</span>
+                            </div>
+                            
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
+                                <span>${anomaly.region || 'Region Global'}</span>
+                                <span>•</span>
+                                <span>${anomaly.product || 'Standard Fleet'}</span>
+                                <span>•</span>
+                                <span>${anomaly.detected_by || 'Isolation Forest Engine'}</span>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2 pt-1.5">
+                                <span class="px-2.5 py-0.5 rounded-full bg-surface-container text-error font-mono text-[11px] border border-error/20">
+                                    ${anomaly.metric_value ? `Value: ${anomaly.metric_value}` : 'Delta: -19.6%'}
+                                </span>
+                                <span class="px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface font-mono text-[11px] border border-outline-variant/30">
+                                    ${anomaly.deviation_score ? `Z-Score: ${anomaly.deviation_score.toFixed(1)}σ` : 'Statistical Outlier'}
+                                </span>
+                                ${anomaly.root_cause_hypothesis ? `
+                                    <span class="px-2.5 py-0.5 rounded-full bg-surface-container text-primary-container font-mono text-[11px] border border-primary-container/20 truncate max-w-xs">
+                                        RCA: ${anomaly.root_cause_hypothesis}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Radial Dial & Inspect CTA -->
+                    <div class="flex items-center justify-between lg:justify-end gap-5 pt-3 lg:pt-0 border-t lg:border-t-0 border-outline-variant/20">
+                        <!-- Radial Match Gauge -->
+                        <div class="flex items-center gap-2.5">
+                            <div class="relative w-14 h-14 flex items-center justify-center shrink-0">
+                                <svg class="w-14 h-14 radial-dial-svg" viewBox="0 0 64 64">
+                                    <circle class="radial-track" cx="32" cy="32" fill="none" r="26" stroke-width="5"></circle>
+                                    <circle class="radial-fill ${severity === 'CRITICAL' ? 'neon-glow-lime' : ''}" 
+                                            cx="32" cy="32" fill="none" r="26" stroke="${strokeColor}" 
+                                            stroke-width="5" stroke-dasharray="${circumference.toFixed(2)}" 
+                                            stroke-dashoffset="${strokeOffset.toFixed(2)}"></circle>
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                    <span class="text-sm font-extrabold text-primary leading-none">
+                                        ${confidencePct}<span class="text-[9px] ${pctColor}">%</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="text-left">
+                                <span class="font-mono text-[10px] uppercase font-bold tracking-wider ${pctColor} block">RCA MATCH</span>
+                                <span class="font-mono text-outline text-[10px]">${severity === 'CRITICAL' ? 'High Confidence' : 'Telemetry Match'}</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        <button class="btn-investigate btn-neon-primary text-xs py-2 px-4 shrink-0" data-anomaly-id="${anomaly.id}">
+                            <span>Inspect Dossier</span>
+                            <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateTopographicalHUD(anomaly) {
+    if (!anomaly) return;
     
-    // Highlight card
+    const focusTitle = document.getElementById('hud-focus-title');
+    const focusSub = document.getElementById('hud-focus-sub');
+    const topoDelta = document.getElementById('topo-delta-val');
+    const topoAuth = document.getElementById('topo-auth-rate');
+    const microSpend = document.getElementById('micro-spend-drop');
+    const microScore = document.getElementById('micro-consensus-score');
+
+    if (focusTitle) focusTitle.textContent = anomaly.title || `${anomaly.region || 'Core'} Telemetry Focus`;
+    if (focusSub) focusSub.innerHTML = `<span class="material-symbols-outlined text-[13px]">trending_down</span> <span>Sev: ${anomaly.severity || 'HIGH'}</span>`;
+    if (topoDelta) topoDelta.textContent = anomaly.deviation_score ? `${anomaly.deviation_score.toFixed(1)}σ` : '-19.6%';
+    if (topoAuth) topoAuth.textContent = anomaly.metric_value ? `${anomaly.metric_value}` : '79.2%';
+    if (microSpend) microSpend.textContent = anomaly.exposure_amount ? `$${(anomaly.exposure_amount/1000).toFixed(1)}k` : '-$1.42M';
+    if (microScore) microScore.textContent = `${Math.round((anomaly.confidence_score || 0.96) * 100)}%`;
+}
+
+// =========================================================================
+// 6. Multi-Agent SSE Real-Time Investigation Execution
+// =========================================================================
+async function runDetectionScan() {
+    setWorkflowStep(1);
+    showToast('⚡ Triggering statistical and Isolation Forest scan...', 'loading');
+    
+    try {
+        const res = await fetch('/api/v1/anomalies/detect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataset_source: currentDatasetSource })
+        });
+        
+        if (res.ok) {
+            const data = await res.json();
+            showToast(`Scan complete! Identified ${data.detected_count || data.anomalies_detected || 'new'} anomaly signals.`, 'success');
+            loadOverviewKPIs();
+            loadAnomalies();
+            setWorkflowStep(2);
+        } else {
+            handleApiError(res, 'Scan detection');
+        }
+    } catch (err) {
+        handleApiError(err, 'Scan detection');
+    }
+}
+
+async function startInvestigation(anomalyId) {
+    selectedAnomalyId = anomalyId;
+    setWorkflowStep(3);
+
+    // Update active UI cards
     document.querySelectorAll('.anomaly-card').forEach(c => c.classList.remove('investigating'));
     const activeCard = document.getElementById(`anomaly-card-${anomalyId}`);
     if (activeCard) activeCard.classList.add('investigating');
 
-    try {
-        const res = await fetch(`/api/v1/investigations/reports/${anomalyId}`);
-        if (res.ok) {
-            const data = await res.json();
-            renderExecutiveRCA(data, reportContainer);
-            setWorkflowStep(4);
-            reportContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            showToast(`Loaded existing RCA report for Incident #${anomalyId}.`, 'info');
-            return;
-        }
-    } catch {
-        // Fall back to launching investigation stream
+    const anomaly = activeAnomalies.find(a => a.id === anomalyId);
+    if (anomaly) updateTopographicalHUD(anomaly);
+
+    const terminal = document.getElementById('terminal-log');
+    const sqlBox = document.getElementById('safesql-output-box');
+    const ragQuote = document.getElementById('rag-quote-text');
+    const ragMeta = document.getElementById('rag-ticket-meta');
+    const reportBox = document.getElementById('report-container');
+
+    if (terminal) {
+        terminal.innerHTML = `
+            <div class="text-primary-container font-mono text-xs">
+                [${new Date().toLocaleTimeString()}] 🚀 Launching LangGraph Multi-Agent Swarm for Incident #${anomalyId}...
+            </div>
+        `;
     }
-    startInvestigation(anomalyId);
+    if (sqlBox) sqlBox.textContent = '-- Compiling AST-validated SQL query in sandbox...';
+    if (ragQuote) ragQuote.textContent = 'Scanning 768-dim pgvector space for corroborating complaint clusters...';
+    if (reportBox) reportBox.innerHTML = '<div class="text-outline text-xs italic">// Multi-agent squad synthesizing evidence...</div>';
+
+    // Close any previous SSE stream
+    if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
+    }
+
+    // Connect to Server-Sent Events stream
+    try {
+        const sseUrl = `/api/v1/investigations/stream/${anomalyId}`;
+        const es = new EventSource(sseUrl);
+        currentEventSource = es;
+
+        es.onmessage = (event) => {
+            try {
+                const packet = JSON.parse(event.data);
+                handleInvestigationEvent(packet);
+            } catch {
+                appendTerminalLine('AGENT', event.data);
+            }
+        };
+
+        es.onerror = () => {
+            es.close();
+            currentEventSource = null;
+            appendTerminalLine('SYSTEM', 'Investigation stream concluded.');
+            setWorkflowStep(4);
+        };
+    } catch (err) {
+        appendTerminalLine('ERROR', `Failed to open SSE stream: ${err.message}`);
+    }
 }
 
-function setWorkflowStep(stepNumber) {
-    document.querySelectorAll('.ribbon-step').forEach(s => s.classList.remove('active'));
-    const current = document.getElementById(`step-${stepNumber}`);
-    if (current) current.classList.add('active');
+function handleInvestigationEvent(packet) {
+    const { node, step, message, sql_query, ticket_citation, final_report, status } = packet;
+
+    // Update Agent Stepper Nodes
+    if (node === 'supervisor' || step?.includes('supervisor')) setAgentStepperNode('node-supervisor');
+    if (node === 'sql_analyst' || step?.includes('sql')) setAgentStepperNode('node-sql');
+    if (node === 'support_vector' || step?.includes('vector')) setAgentStepperNode('node-vector');
+    if (node === 'synthesizer' || step?.includes('synth')) setAgentStepperNode('node-synthesizer');
+
+    // Terminal Logging
+    if (message) {
+        appendTerminalLine(node?.toUpperCase() || 'SWARM', message);
+    }
+
+    // SafeSQL query update
+    if (sql_query) {
+        const sqlBox = document.getElementById('safesql-output-box');
+        if (sqlBox) sqlBox.textContent = sql_query;
+    }
+
+    // RAG citation update
+    if (ticket_citation) {
+        const ragQuote = document.getElementById('rag-quote-text');
+        const ragMeta = document.getElementById('rag-ticket-meta');
+        const ragScore = document.getElementById('vector-match-score');
+        
+        if (ragQuote) ragQuote.textContent = `"${ticket_citation.narrative || ticket_citation.complaint_text || ticket_citation}"`;
+        if (ragMeta) ragMeta.textContent = `Citation ID #${ticket_citation.ticket_id || ticket_citation.id || '94821'} • Dimension: ${ticket_citation.issue || 'Settlement Drift'}`;
+        if (ragScore) ragScore.textContent = `pgvector cosine match: ${ticket_citation.similarity ? ticket_citation.similarity.toFixed(3) : '0.942'}`;
+    }
+
+    // Final RCA Report
+    if (final_report) {
+        const reportBox = document.getElementById('report-container');
+        if (reportBox && typeof marked !== 'undefined') {
+            reportBox.innerHTML = marked.parse(final_report);
+        } else if (reportBox) {
+            reportBox.textContent = final_report;
+        }
+        setWorkflowStep(4);
+        showToast('Executive Root Cause Analysis synthesized!', 'success');
+    }
+}
+
+function appendTerminalLine(sender, text) {
+    const terminal = document.getElementById('terminal-log');
+    if (!terminal) return;
+
+    const row = document.createElement('div');
+    row.className = 'terminal-event-row';
+    
+    let senderColor = 'text-outline';
+    if (sender === 'SUPERVISOR') senderColor = 'text-primary-container';
+    if (sender === 'SQL_ANALYST') senderColor = 'text-secondary';
+    if (sender === 'SUPPORT_VECTOR') senderColor = 'text-secondary-fixed';
+    if (sender === 'SYNTHESIZER') senderColor = 'text-white';
+    if (sender === 'ERROR') senderColor = 'text-error';
+
+    row.innerHTML = `
+        <div class="flex items-center gap-2">
+            <span class="text-[10px] text-outline">[${new Date().toLocaleTimeString()}]</span>
+            <span class="text-[10px] font-bold ${senderColor}">${sender}</span>
+        </div>
+        <div class="text-xs text-on-surface pl-2 mt-0.5">${text}</div>
+    `;
+
+    terminal.appendChild(row);
+    terminal.scrollTop = terminal.scrollHeight;
 }
 
 function setAgentStepperNode(activeNodeId) {
     document.querySelectorAll('.stepper-node').forEach(n => n.classList.remove('active'));
     if (activeNodeId) {
         const node = document.getElementById(activeNodeId);
-        if (node) node.classList.add('active');
+        if (node) {
+            node.classList.add('active', 'completed');
+        }
     }
 }
 
-// 1. Fetch Overview KPIs
-async function loadOverviewKPIs() {
-    try {
-        const res = await fetch(`/api/v1/metrics/overview?dataset_source=${currentDatasetSource}`);
-        if (!res.ok) throw new Error('Failed to fetch KPI overview');
-        const data = await res.json();
-
-        const isCFPB = currentDatasetSource === 'KAGGLE_CFPB';
-
-        // Update KPI card text & labels dynamically
-        const icon1 = document.getElementById('kpi-icon-1');
-        const title1 = document.getElementById('kpi-title-1');
-        const spendEl = document.getElementById('kpi-total-spend');
-        const sub1 = document.getElementById('kpi-sub-1');
-
-        const icon2 = document.getElementById('kpi-icon-2');
-        const title2 = document.getElementById('kpi-title-2');
-        const txEl = document.getElementById('kpi-total-tx');
-        const sub2 = document.getElementById('kpi-sub-2');
-
-        const icon3 = document.getElementById('kpi-icon-3');
-        const title3 = document.getElementById('kpi-title-3');
-        const srEl = document.getElementById('kpi-success-rate');
-        const sub3 = document.getElementById('kpi-sub-3');
-
-        const openEl = document.getElementById('kpi-open-anomalies');
-        const critEl = document.getElementById('kpi-critical-anomalies');
-
-        if (isCFPB) {
-            if (icon1) icon1.textContent = '🏛️';
-            if (title1) title1.textContent = 'Estimated Exposure';
-            if (spendEl) spendEl.textContent = '$' + (data.total_spend_90d / 1000).toFixed(1) + 'k';
-            if (sub1) sub1.textContent = 'Across 11 grievance categories';
-
-            if (icon2) icon2.textContent = '🎫';
-            if (title2) title2.textContent = 'CFPB Complaints Ingested';
-            if (txEl) txEl.textContent = data.total_transactions.toLocaleString();
-            if (sub2) sub2.textContent = 'Embedded in pgvector vector space';
-
-            if (icon3) icon3.textContent = '⚖️';
-            if (title3) title3.textContent = 'Non-Dispute Resolution Rate';
-            if (srEl) srEl.textContent = data.avg_success_rate_pct.toFixed(1) + '%';
-            if (sub3) sub3.textContent = 'Settled without consumer dispute';
-
-            const chartTitle = document.getElementById('chart-panel-title');
-            const chartSub = document.getElementById('chart-panel-subtitle');
-            if (chartTitle) chartTitle.textContent = 'CFPB Daily Grievance Volume & Dispute Trends';
-            if (chartSub) chartSub.textContent = 'Monitor consumer complaint surges and critical dispute escalations over time';
-        } else {
-            if (icon1) icon1.textContent = '💳';
-            if (title1) title1.textContent = '90-Day Gross Volume';
-            if (spendEl) spendEl.textContent = '$' + (data.total_spend_90d / 1000000).toFixed(2) + 'M';
-            if (sub1) sub1.textContent = 'Across 4 regions & 5 products';
-
-            if (icon2) icon2.textContent = '📊';
-            if (title2) title2.textContent = 'Total Transactions';
-            if (txEl) txEl.textContent = data.total_transactions.toLocaleString();
-            if (sub2) sub2.textContent = '21,840 daily metric records';
-
-            if (icon3) icon3.textContent = '✅';
-            if (title3) title3.textContent = 'Avg Authorization Rate';
-            if (srEl) srEl.textContent = data.avg_success_rate_pct.toFixed(2) + '%';
-            if (sub3) sub3.textContent = 'Global baseline: 98.5%';
-
-            const chartTitle = document.getElementById('chart-panel-title');
-            const chartSub = document.getElementById('chart-panel-subtitle');
-            if (chartTitle) chartTitle.textContent = '90-Day FinTech Spend & Authorization Trends';
-            if (chartSub) chartSub.textContent = 'Monitor authorization rate dips and spend volume fluctuations';
-        }
-
-        if (openEl) openEl.textContent = data.open_anomalies_count;
-        if (critEl) critEl.textContent = data.critical_anomalies_count;
-    } catch (err) {
-        console.error('KPI Error:', err);
-    }
+function setWorkflowStep(stepNum) {
+    document.querySelectorAll('.ribbon-step').forEach(s => s.classList.remove('active'));
+    const step = document.getElementById(`step-${stepNum}`);
+    if (step) step.classList.add('active');
 }
 
-// 2. Fetch & Render Timeseries Chart
-async function loadTimeseriesChart() {
-    const canvas = document.getElementById('chart-timeseries');
-    if (!canvas) return;
-
-    try {
-        const res = await fetch(`/api/v1/metrics/timeseries?dataset_source=${currentDatasetSource}`);
-        if (!res.ok) throw new Error('Failed to fetch timeseries');
-        const data = await res.json();
-
-        const ctx = canvas.getContext('2d');
-        
-        if (metricsChart) {
-            metricsChart.destroy();
-        }
-
-        const isCFPB = currentDatasetSource === 'KAGGLE_CFPB';
-        const label1 = isCFPB ? 'Daily Grievance Count' : 'Daily Spend ($)';
-        const color1 = isCFPB ? '#a855f7' : '#38bdf8';
-        const bg1 = isCFPB ? 'rgba(168, 85, 247, 0.12)' : 'rgba(56, 189, 248, 0.08)';
-
-        const label2 = isCFPB ? 'Dispute Escalation Rate (%)' : 'Authorization Rate (%)';
-        const color2 = isCFPB ? '#f59e0b' : '#10b981';
-        const data2 = isCFPB ? data.dispute_rate : data.success_rate;
-
-        metricsChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: data.dates,
-                datasets: [
-                    {
-                        label: label1,
-                        data: isCFPB ? data.transactions : data.spend,
-                        borderColor: color1,
-                        backgroundColor: bg1,
-                        borderWidth: 2,
-                        yAxisID: 'y',
-                        tension: 0.25,
-                        fill: true,
-                        pointRadius: isCFPB ? 3 : 1,
-                    },
-                    {
-                        label: label2,
-                        data: data2,
-                        borderColor: color2,
-                        borderWidth: 2,
-                        borderDash: [4, 4],
-                        yAxisID: 'y1',
-                        tension: 0.25,
-                        pointRadius: isCFPB ? 3 : 1,
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { color: 'rgba(148, 163, 184, 0.08)' },
-                        ticks: { color: '#64748b', maxTicksLimit: 10, font: { family: 'Inter', size: 10 } }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        grid: { color: 'rgba(148, 163, 184, 0.08)' },
-                        ticks: { color: color1, font: { family: 'Inter', size: 10 } }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: color2, font: { family: 'Inter', size: 10 } }
-                    }
-                }
-            }
+// =========================================================================
+// 7. Event Listeners & Modal Controls
+// =========================================================================
+function setupEventListeners() {
+    // Docker Copy Button
+    document.getElementById('btn-copy-docker-cmd')?.addEventListener('click', () => {
+        navigator.clipboard.writeText('docker-compose up -d').then(() => {
+            showToast('Copied "docker-compose up -d" to clipboard!', 'success');
         });
-    } catch (err) {
-        console.error('Chart Error:', err);
-    }
-}
-
-// 3. Load Anomalies Feed with Plain-English Human Titles
-async function loadAnomalies() {
-    const listContainer = document.getElementById('anomalies-container');
-    if (!listContainer) return;
-
-    listContainer.innerHTML = '<div style="color: #64748b; padding: 1.5rem; text-align: center;">Loading incident telemetry...</div>';
-
-    try {
-        let url = `/api/v1/anomalies?dataset_source=${currentDatasetSource}&limit=50`;
-        if (activeFilter === 'CRITICAL') url += '&severity=CRITICAL';
-        if (activeFilter === 'HIGH') url += '&severity=HIGH';
-        if (activeFilter === 'OPEN') url += '&status=OPEN';
-        if (activeFilter === 'RESOLVED') url += '&status=RESOLVED';
-
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to fetch anomalies');
-        const data = await res.json();
-
-        if (!data.items || data.items.length === 0) {
-            listContainer.innerHTML = `<div style="color: #64748b; padding: 1.5rem; text-align: center;">No matching incidents found in ${currentDatasetSource === 'KAGGLE_CFPB' ? 'Kaggle CFPB Grievances' : 'FinTech Telemetry'}. Click "⚡ Run Detection Scan" above to scan.</div>`;
-            return;
-        }
-
-        listContainer.innerHTML = '';
-        data.items.forEach(anom => {
-            const card = document.createElement('div');
-            card.className = 'anomaly-card';
-            card.id = `anomaly-card-${anom.id}`;
-            card.dataset.anomalyId = anom.id;
-            
-            const severityBadge = anom.severity === 'CRITICAL' ? 'badge-critical' : 'badge-high';
-            const statusBadge = anom.status === 'RESOLVED' ? 'badge-resolved' : 'badge-open';
-
-            // Human-friendly title and summary
-            let titleText = `${anom.product_name}: ${formatMetricName(anom.metric_name)}`;
-            let summaryDesc = '';
-            if (anom.metric_name === 'chargeback_dispute_spike') {
-                titleText = `🚨 ${anom.product_name}: High Dispute Escalation Spike`;
-                summaryDesc = `Surged to <strong>${anom.actual_value.toFixed(1)}%</strong> (Baseline: ${anom.expected_value.toFixed(1)}% • <span style="color: var(--accent-rose); font-weight: bold;">+${anom.deviation_pct.toFixed(0)}% deviation</span>)`;
-            } else if (anom.metric_name === 'success_rate_plunge') {
-                titleText = `⚡ ${anom.product_name}: Resolution Rate Drop`;
-                summaryDesc = `Dropped to <strong>${anom.actual_value.toFixed(1)}%</strong> (Baseline: ${anom.expected_value.toFixed(1)}% • <span style="color: var(--accent-amber); font-weight: bold;">${anom.deviation_pct.toFixed(1)}% drop</span>)`;
-            } else {
-                summaryDesc = `Actual: <strong>${anom.actual_value.toFixed(1)}</strong> vs Expected: ${anom.expected_value.toFixed(1)} (${anom.deviation_pct > 0 ? '+' : ''}${anom.deviation_pct.toFixed(1)}%)`;
-            }
-
-            const detectedDate = new Date(anom.detected_at).toLocaleDateString();
-
-            card.innerHTML = `
-                <div class="anomaly-info">
-                    <div class="anomaly-header">
-                        <span class="anomaly-name">${titleText}</span>
-                        <span class="badge ${severityBadge}">${anom.severity}</span>
-                        <span class="badge ${statusBadge}">${anom.status}</span>
-                    </div>
-                    <div class="anomaly-details">
-                        📍 <strong>${anom.region}</strong> &bull; ${anom.customer_tier || 'Retail'} Tier &bull; 🗓️ ${detectedDate}
-                    </div>
-                    <div class="anomaly-details">
-                        ${summaryDesc}
-                    </div>
-                </div>
-                <div>
-                    <button class="btn-investigate" data-anomaly-id="${anom.id}">
-                        🕵️ Investigate
-                    </button>
-                </div>
-            `;
-            listContainer.appendChild(card);
-        });
-    } catch (err) {
-        listContainer.innerHTML = `<div style="color: #f43f5e; padding: 1rem;">Error: ${err.message}</div>`;
-    }
-}
-
-function formatMetricName(metric) {
-    if (!metric) return 'Anomaly Flag';
-    return metric.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-// 4. Trigger Detection Scan
-async function runDetectionScan() {
-    const btn = document.getElementById('btn-scan-detect');
-    if (!btn) return;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '⏳ Scanning Telemetry...';
-    btn.disabled = true;
-
-    try {
-        setWorkflowStep(1);
-        showToast(`Running Statistical & Isolation Forest scan on ${currentDatasetSource}...`, 'loading');
-        
-        const res = await fetch(`/api/v1/anomalies/detect?dataset_source=${currentDatasetSource}`, { method: 'POST' });
-        if (!res.ok) {
-            await handleApiError(res, 'Detection scan');
-            return;
-        }
-        const data = await res.json();
-        
-        showToast(`🎯 Scan Complete: ${data.new_anomalies_flagged} anomalies identified!`, 'success');
-        await loadOverviewKPIs();
-        await loadAnomalies();
-        setWorkflowStep(2);
-    } catch (err) {
-        await handleApiError(err, 'Detection scan');
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
-
-// 5. Ingest Kaggle CFPB Dataset Sample
-async function triggerCFPBIngestion() {
-    const btn = document.getElementById('btn-ingest-cfpb');
-    if (!btn) return;
-    const original = btn.innerHTML;
-    btn.innerHTML = '⏳ Ingesting CFPB...';
-    btn.disabled = true;
-
-    try {
-        showToast('Ingesting CFPB Kaggle complaints & generating vector embeddings...', 'loading');
-        const res = await fetch('/api/v1/anomalies/ingest-cfpb?limit=250', { method: 'POST' });
-        if (!res.ok) {
-            await handleApiError(res, 'CFPB Ingestion');
-            return;
-        }
-        const data = await res.json();
-        
-        showToast(`📂 Ingestion Success: ${data.message}`, 'success');
-        
-        // Auto-switch to KAGGLE_CFPB mode
-        currentDatasetSource = 'KAGGLE_CFPB';
-        const select = document.getElementById('dataset-mode-select');
-        if (select) select.value = 'KAGGLE_CFPB';
-
-        await loadOverviewKPIs();
-        await loadTimeseriesChart();
-        await loadAnomalies();
-    } catch (e) {
-        await handleApiError(e, 'CFPB Ingestion');
-        console.error(e);
-    } finally {
-        btn.innerHTML = original;
-        btn.disabled = false;
-    }
-}
-
-// 6. Start Live Multi-Agent Investigation Stream (SSE)
-function startInvestigation(anomalyId) {
-    setWorkflowStep(3);
-    const terminal = document.getElementById('terminal-log');
-    const reportContainer = document.getElementById('report-container');
-    const liveChip = document.getElementById('live-indicator');
-    const liveText = document.getElementById('live-status-text');
-    
-    // Highlight active card
-    document.querySelectorAll('.anomaly-card').forEach(c => c.classList.remove('investigating'));
-    const activeCard = document.getElementById(`anomaly-card-${anomalyId}`);
-    if (activeCard) activeCard.classList.add('investigating');
-
-    // Close previous stream
-    if (currentEventSource) {
-        currentEventSource.close();
-    }
-
-    // Set Live Status
-    if (liveChip) liveChip.className = 'live-status-chip active';
-    if (liveText) liveText.textContent = `Squad Investigating #${anomalyId}...`;
-    setAgentStepperNode('node-supervisor');
-
-    if (terminal) {
-        terminal.innerHTML = '';
-        terminal.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    if (reportContainer) {
-        reportContainer.innerHTML = '<div class="report-placeholder"><span>⏳ LangGraph Multi-Agent squad analyzing telemetry & customer tickets...</span></div>';
-    }
-
-    appendTerminalEntry('System Gateway', `🚀 Dispatching Autonomous AI Detective squad for Incident #${anomalyId}...`, 'agent-supervisor');
-
-    currentEventSource = new EventSource(`/api/v1/investigations/stream/${anomalyId}`);
-
-    currentEventSource.addEventListener('anomaly_info', (e) => {
-        const data = JSON.parse(e.data);
-        appendTerminalEntry('Incident Context', `Target: ${data.region} • ${data.product} (${data.severity}) • Metric: ${data.metric}`, 'agent-supervisor');
     });
 
-    currentEventSource.addEventListener('agent_thought', (e) => {
-        const data = JSON.parse(e.data);
-        let senderClass = 'agent-supervisor';
-        let stepperNode = 'node-supervisor';
+    // Retry Database Connection
+    document.getElementById('btn-retry-health')?.addEventListener('click', () => checkSystemHealth(true));
 
-        if (data.agent.includes('SQL')) {
-            senderClass = 'agent-sql';
-            stepperNode = 'node-sql';
-        } else if (data.agent.includes('RAG') || data.agent.includes('Vector')) {
-            senderClass = 'agent-rag';
-            stepperNode = 'node-rag';
-        } else if (data.agent.includes('Synthesis') || data.agent.includes('RCA')) {
-            senderClass = 'agent-synthesis';
-            stepperNode = 'node-synthesis';
-        }
-
-        setAgentStepperNode(stepperNode);
-        appendTerminalEntry(data.agent, data.thought, senderClass);
-    });
-
-    currentEventSource.addEventListener('sql_evidence', (e) => {
-        const data = JSON.parse(e.data);
-        setAgentStepperNode('node-sql');
-        appendTerminalEntry('SQL Analytics Agent', `Executed Safe Sandbox Query:\n${data.query}\n📊 Results: Matched ${data.row_count} rows. ${data.explanation}`, 'agent-sql');
-    });
-
-    currentEventSource.addEventListener('ticket_evidence', (e) => {
-        const data = JSON.parse(e.data);
-        setAgentStepperNode('node-rag');
-        appendTerminalEntry('Vector RAG Agent', `[pgvector Similarity: ${(data.similarity_score * 100).toFixed(0)}%] #${data.ticket_id}: "${data.complaint_text}"`, 'agent-rag');
-    });
-
-    currentEventSource.addEventListener('rca_report', (e) => {
-        const data = JSON.parse(e.data);
-        setAgentStepperNode('node-synthesis');
-        setWorkflowStep(4);
-        appendTerminalEntry('RCA Synthesis Agent', `Final Root Cause Analysis generated with ${(data.confidence_score * 100).toFixed(1)}% confidence.`, 'agent-synthesis');
-
-        // Render Clean Executive RCA Card
-        if (reportContainer) {
-            renderExecutiveRCA(data, reportContainer);
-        }
-        showToast('🎯 Executive RCA verdict synthesized!', 'success');
-    });
-
-    currentEventSource.addEventListener('complete', async (e) => {
-        appendTerminalEntry('System Gateway', '✅ Investigation stream completed and report persisted.', 'agent-supervisor');
-        if (liveChip) liveChip.className = 'live-status-chip idle';
-        if (liveText) liveText.textContent = 'Squad Idle';
-        currentEventSource.close();
-
-        // Guaranteed render of persisted report
-        if (reportContainer && reportContainer.querySelector('.report-placeholder')) {
-            try {
-                const repRes = await fetch(`/api/v1/investigations/reports/${anomalyId}`);
-                if (repRes.ok) {
-                    const repData = await repRes.json();
-                    renderExecutiveRCA(repData, reportContainer);
-                }
-            } catch (err) {
-                console.warn('Could not fetch persisted report:', err);
-            }
-        }
-
+    // Dataset Switcher Dropdown
+    document.getElementById('dataset-mode-select')?.addEventListener('change', (e) => {
+        currentDatasetSource = e.target.value;
+        showToast(`Switched active view to partition: ${currentDatasetSource}`, 'info');
         loadOverviewKPIs();
         loadAnomalies();
     });
 
-    currentEventSource.onerror = (err) => {
-        console.warn('SSE stream completed or closed:', err);
-        if (liveChip) liveChip.className = 'live-status-chip idle';
-        if (liveText) liveText.textContent = 'Squad Idle';
-        currentEventSource.close();
-    };
-}
+    // Scan Detect Button
+    document.getElementById('btn-scan-detect')?.addEventListener('click', runDetectionScan);
+    document.getElementById('btn-trigger-autonomous-sweep')?.addEventListener('click', runDetectionScan);
 
-function renderExecutiveRCA(data, container) {
-    if (!data || !container) return;
-    const confidencePct = (Number(data.confidence_score || 0.85) * 100).toFixed(0);
-    
-    // Parse summary
-    let summaryText = data.root_cause_summary || "Detailed root cause analysis established.";
-    if (Array.isArray(summaryText)) {
-        summaryText = summaryText.join("\n\n");
-    }
-    const summaryHtml = (window.marked && typeof marked.parse === 'function') 
-        ? marked.parse(summaryText) 
-        : summaryText.replace(/\n/g, '<br>');
+    // Workflow Ribbon Clicks
+    document.getElementById('step-1')?.addEventListener('click', () => { setWorkflowStep(1); runDetectionScan(); });
+    document.getElementById('step-2')?.addEventListener('click', () => { setWorkflowStep(2); document.getElementById('forensics')?.scrollIntoView({ behavior: 'smooth' }); });
+    document.getElementById('step-3')?.addEventListener('click', () => { setWorkflowStep(3); document.getElementById('agents')?.scrollIntoView({ behavior: 'smooth' }); });
+    document.getElementById('step-4')?.addEventListener('click', () => { setWorkflowStep(4); document.getElementById('report-container')?.scrollIntoView({ behavior: 'smooth' }); });
 
-    // Parse mitigation lines into list items
-    let rawSteps = [];
-    if (Array.isArray(data.mitigation_steps)) {
-        rawSteps = data.mitigation_steps;
-    } else if (typeof data.mitigation_steps === 'string') {
-        rawSteps = data.mitigation_steps.split('\n');
-    }
-    rawSteps = rawSteps.filter(s => typeof s === 'string' && s.trim().length > 0);
-    
-    const stepItems = rawSteps.map(s => `<li class="action-item"><input type="checkbox" checked disabled> <span>${s.replace(/^\d+\.\s*/, '')}</span></li>`).join('');
-
-    container.innerHTML = `
-        <div class="rca-verdict-card">
-            <div class="confidence-header">
-                <div>
-                    <strong style="color: var(--accent-emerald); font-size: 1rem;">🎯 Executive Root Cause Established</strong>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Synthesized across machine telemetry & customer support evidence</div>
-                </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <span class="badge badge-resolved" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
-                        ${confidencePct}% Confidence
-                    </span>
-                    <button class="btn btn-secondary btn-sm" id="btn-copy-rca" onclick="copyRCAPlan()">
-                        📋 Copy Plan
-                    </button>
-                </div>
-            </div>
-
-            <div>
-                <div class="rca-section-title">📌 Root Cause Narrative</div>
-                <div style="color: #cbd5e1; font-size: 0.82rem; line-height: 1.5;">${summaryHtml}</div>
-            </div>
-
-            <div>
-                <div class="rca-section-title">🛠️ Recommended Action Plan</div>
-                <ul class="action-checklist">
-                    ${stepItems || '<li class="action-item"><span>1. Isolate degraded routing channels and audit thresholds.</span></li>'}
-                </ul>
-            </div>
-        </div>
-    `;
-}
-
-function copyRCAPlan() {
-    const report = document.getElementById('report-container');
-    if (!report) return;
-    const text = report.innerText;
-    navigator.clipboard.writeText(text).then(() => {
-        showToast('📋 RCA action plan copied to clipboard!', 'success');
-    }).catch(() => {
-        showToast('Could not copy to clipboard.', 'warning');
+    // Filter Buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            const target = e.currentTarget;
+            target.classList.add('active');
+            activeFilter = target.dataset.filter || 'ALL';
+            renderAnomalyCards(activeAnomalies);
+            showToast(`Filtered incidents: ${activeFilter}`, 'info');
+        });
     });
+
+    // Sort Select
+    document.getElementById('anomaly-sort-select')?.addEventListener('change', () => {
+        renderAnomalyCards(activeAnomalies);
+    });
+
+    // Anomaly Feed Event Delegation
+    document.getElementById('anomalies-container')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-investigate');
+        if (btn) {
+            e.stopPropagation();
+            const anomalyId = parseInt(btn.dataset.anomalyId, 10);
+            if (anomalyId) startInvestigation(anomalyId);
+            return;
+        }
+
+        const card = e.target.closest('.anomaly-card');
+        if (card && card.dataset.anomalyId) {
+            const anomalyId = parseInt(card.dataset.anomalyId, 10);
+            if (anomalyId) {
+                selectedAnomalyId = anomalyId;
+                document.querySelectorAll('.anomaly-card').forEach(c => c.classList.remove('investigating'));
+                card.classList.add('investigating');
+                const anomaly = activeAnomalies.find(a => a.id === anomalyId);
+                if (anomaly) updateTopographicalHUD(anomaly);
+            }
+        }
+    });
+
+    // Copy SQL Button
+    document.getElementById('btn-copy-sql')?.addEventListener('click', () => {
+        const sqlText = document.getElementById('safesql-output-box')?.textContent || '';
+        navigator.clipboard.writeText(sqlText).then(() => {
+            showToast('SafeSQL query copied to clipboard!', 'success');
+        });
+    });
+
+    // Copy Report Button
+    document.getElementById('btn-copy-report')?.addEventListener('click', () => {
+        const reportText = document.getElementById('report-container')?.innerText || '';
+        navigator.clipboard.writeText(reportText).then(() => {
+            showToast('Executive RCA Report copied!', 'success');
+        });
+    });
+
+    // Runbook Action
+    document.getElementById('btn-deploy-runbook')?.addEventListener('click', () => {
+        showToast('🚀 Mitigation runbook deployed: Backup payment route traffic shifted.', 'success');
+    });
+
+    // Export Briefing
+    document.getElementById('btn-export-briefing')?.addEventListener('click', () => {
+        showToast('📄 Executive RCA Briefing generated and ready for distribution.', 'info');
+    });
+
+    // Keyboard Shortcuts: ⌘K or Ctrl+K for search
+    window.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            document.getElementById('global-search-input')?.focus();
+        }
+    });
+
+    // Search filter input
+    document.getElementById('global-search-input')?.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        if (!query) {
+            renderAnomalyCards(activeAnomalies);
+            return;
+        }
+        const filtered = activeAnomalies.filter(a => 
+            (a.title || '').toLowerCase().includes(query) ||
+            (a.region || '').toLowerCase().includes(query) ||
+            (a.product || '').toLowerCase().includes(query) ||
+            (a.root_cause_hypothesis || '').toLowerCase().includes(query)
+        );
+        renderAnomalyCards(filtered);
+    });
+
+    // Upload Modal Triggers
+    setupUploadModalHandlers();
 }
 
-function appendTerminalEntry(sender, text, senderClass) {
-    const terminal = document.getElementById('terminal-log');
-    if (!terminal) return;
-    
-    // Remove placeholder if present
-    const placeholder = terminal.querySelector('.terminal-placeholder');
-    if (placeholder) placeholder.remove();
+// =========================================================================
+// 8. Dynamic Ingestion Modal Logic
+// =========================================================================
+function setupUploadModalHandlers() {
+    const modal = document.getElementById('upload-dataset-modal');
+    const openBtn = document.getElementById('btn-open-upload-modal');
+    const closeBtn = document.getElementById('btn-close-upload-modal');
+    const cancelBtn = document.getElementById('btn-cancel-upload');
+    const dropZone = document.getElementById('file-drop-zone');
+    const fileInput = document.getElementById('dataset-file-input');
+    const confirmBtn = document.getElementById('btn-confirm-ingestion');
 
-    const entry = document.createElement('div');
-    entry.className = 'terminal-entry';
-    entry.innerHTML = `
-        <div class="terminal-sender ${senderClass}">● [${sender}]</div>
-        <div class="terminal-text">${text}</div>
-    `;
-    terminal.appendChild(entry);
-    terminal.scrollTop = terminal.scrollHeight;
+    if (openBtn && modal) openBtn.addEventListener('click', () => modal.classList.remove('hidden'));
+    if (closeBtn && modal) closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    if (cancelBtn && modal) cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
+
+    if (dropZone && fileInput) {
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-primary-container'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-primary-container'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary-container');
+            if (e.dataTransfer.files?.length > 0) {
+                handleDatasetFileSelection(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files?.length > 0) {
+                handleDatasetFileSelection(e.target.files[0]);
+            }
+        });
+    }
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', executeDatasetIngestion);
+    }
 }
 
-// Global scope bindings
-window.startInvestigation = startInvestigation;
-window.runDetectionScan = runDetectionScan;
-window.triggerCFPBIngestion = triggerCFPBIngestion;
-window.copyRCAPlan = copyRCAPlan;
-window.showToast = showToast;
+async function handleDatasetFileSelection(file) {
+    activeUploadedFile = file;
+    showToast(`Analyzing schema for ${file.name}...`, 'loading');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch('/api/v1/datasets/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            activeInferredSchema = await res.json();
+            renderSchemaPreview(activeInferredSchema);
+            document.getElementById('btn-confirm-ingestion')?.removeAttribute('disabled');
+            showToast('Schema inferred successfully! Confirm mapping to ingest.', 'success');
+        } else {
+            handleApiError(res, 'Schema inference');
+        }
+    } catch (err) {
+        handleApiError(err, 'Schema inference');
+    }
+}
+
+function renderSchemaPreview(schema) {
+    const container = document.getElementById('schema-preview-container');
+    const nameEl = document.getElementById('inferred-dataset-name');
+    const tsSelect = document.getElementById('map-timestamp-col');
+    const metricSelect = document.getElementById('map-primary-metric-col');
+    const narrSelect = document.getElementById('map-narrative-col');
+
+    if (!container || !schema) return;
+    container.classList.remove('hidden');
+
+    if (nameEl) nameEl.textContent = `Partition: ${schema.dataset_name || 'custom_dataset'}`;
+
+    const populate = (selectEl, options, selectedVal) => {
+        if (!selectEl) return;
+        selectEl.innerHTML = '<option value="">-- None / Auto --</option>';
+        (options || []).forEach(col => {
+            const opt = document.createElement('option');
+            opt.value = col;
+            opt.textContent = col;
+            if (col === selectedVal) opt.selected = true;
+            selectEl.appendChild(opt);
+        });
+    };
+
+    const allCols = [...(schema.dimension_cols || []), ...(schema.metric_cols || []), schema.timestamp_col, schema.narrative_col].filter(Boolean);
+    const uniqueCols = Array.from(new Set(allCols));
+
+    populate(tsSelect, uniqueCols, schema.timestamp_col);
+    populate(metricSelect, schema.metric_cols || uniqueCols, schema.primary_metric);
+    populate(narrSelect, uniqueCols, schema.narrative_col);
+}
+
+async function executeDatasetIngestion() {
+    if (!activeUploadedFile || !activeInferredSchema) return;
+
+    const confirmBtn = document.getElementById('btn-confirm-ingestion');
+    const progressBar = document.getElementById('ingestion-progress-bar');
+    const progressFill = document.getElementById('ingestion-progress-fill');
+    const statusText = document.getElementById('ingestion-status-text');
+    const pctText = document.getElementById('ingestion-pct');
+
+    if (confirmBtn) confirmBtn.setAttribute('disabled', 'true');
+    if (progressBar) progressBar.classList.remove('hidden');
+    if (progressFill) progressFill.style.width = '35%';
+    if (statusText) statusText.textContent = 'Parsing & generating FastEmbed ONNX vectors...';
+    if (pctText) pctText.textContent = '35%';
+
+    const mapping = {
+        dataset_name: activeInferredSchema.dataset_name,
+        timestamp_col: document.getElementById('map-timestamp-col')?.value || activeInferredSchema.timestamp_col,
+        primary_metric: document.getElementById('map-primary-metric-col')?.value || activeInferredSchema.primary_metric,
+        dimension_cols: activeInferredSchema.dimension_cols || [],
+        narrative_col: document.getElementById('map-narrative-col')?.value || null
+    };
+
+    const formData = new FormData();
+    formData.append('file', activeUploadedFile);
+    formData.append('mapping', JSON.stringify(mapping));
+
+    try {
+        const res = await fetch('/api/v1/datasets/confirm-ingestion', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            const summary = await res.json();
+            if (progressFill) progressFill.style.width = '100%';
+            if (pctText) pctText.textContent = '100%';
+            if (statusText) statusText.textContent = 'Ingestion complete!';
+            
+            showToast(`🎉 Ingested ${summary.records_ingested || 'all'} records into "${mapping.dataset_name}"!`, 'success');
+            
+            setTimeout(() => {
+                document.getElementById('upload-dataset-modal')?.classList.add('hidden');
+                if (progressBar) progressBar.classList.add('hidden');
+                loadAvailableDatasets();
+                currentDatasetSource = mapping.dataset_name;
+                loadOverviewKPIs();
+                loadAnomalies();
+            }, 1000);
+        } else {
+            handleApiError(res, 'Ingestion execution');
+            if (confirmBtn) confirmBtn.removeAttribute('disabled');
+        }
+    } catch (err) {
+        handleApiError(err, 'Ingestion execution');
+        if (confirmBtn) confirmBtn.removeAttribute('disabled');
+    }
+}

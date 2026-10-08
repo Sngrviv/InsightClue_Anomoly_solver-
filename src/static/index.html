@@ -1,285 +1,708 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InsightClue — Autonomous AI FinTech Detective Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <!-- Google Fonts: Inter & JetBrains Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>InsightClue — Autonomous AI Forensic RCA Engine</title>
+    
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Material Symbols Outlined -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container-lowest": "#0d0e11",
+                        "surface-container-low": "#1b1b1f",
+                        "surface-container": "#1f1f23",
+                        "surface-container-high": "#292a2d",
+                        "surface-container-highest": "#343538",
+                        "surface-dim": "#121316",
+                        "surface-bright": "#38393c",
+                        "background": "#121316",
+                        "primary": "#ffffff",
+                        "primary-container": "#c3f400",
+                        "on-primary-container": "#556d00",
+                        "secondary": "#c0d82f",
+                        "secondary-fixed": "#d6ef46",
+                        "tertiary": "#ffffff",
+                        "outline": "#8e9379",
+                        "outline-variant": "#444933",
+                        "on-surface": "#e3e2e6",
+                        "on-surface-variant": "#c4c9ac",
+                        "error": "#ffb4ab",
+                        "error-container": "#93000a"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "1.5rem",
+                        "xl": "2rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "sans": ["Plus Jakarta Sans", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+
     <!-- Chart.js & Marked.js CDNs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    
+    <!-- Project Stylesheet -->
+    <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
-    <!-- Top Navigation Header -->
-    <header class="app-header">
-        <div class="logo-group">
-            <div class="logo-icon">🕵️</div>
-            <div>
-                <div class="logo-title">InsightClue <span class="badge-ai">AI Detective</span></div>
-                <div class="logo-subtitle">Autonomous Multi-Agent FinTech Anomaly Detection & RCA</div>
+<body class="bg-surface-container-lowest text-on-surface antialiased min-h-screen selection:bg-primary-container selection:text-surface-container-lowest flex flex-col">
+
+    <!-- Background Ambient Grid & Cybernetic Telemetry Texture -->
+    <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-b from-[#0d0e11]/80 via-[#0d0e11]/60 to-[#0d0e11]/95"></div>
+        <div class="absolute inset-0 bg-radial from-transparent via-[#0d0e11]/40 to-[#0d0e11]/90"></div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TopNavBar (Obsidian Kinetic Navigation Rail)                             -->
+    <!-- ========================================================================= -->
+    <header class="top-0 z-50 sticky bg-surface-container-lowest/80 backdrop-blur-xl border-b border-outline-variant/30 shadow-2xl">
+        <div class="flex flex-wrap justify-between items-center w-full px-4 lg:px-12 py-3 max-w-[1600px] mx-auto gap-3">
+            
+            <!-- Brand & Search cluster -->
+            <div class="flex items-center gap-4">
+                <div class="text-xl font-extrabold tracking-tight text-primary flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-full bg-primary-container text-surface-container-lowest flex items-center justify-center font-extrabold text-sm neon-glow-subtle">
+                        <span class="material-symbols-outlined text-[20px]" data-icon="troubleshoot">troubleshoot</span>
+                    </div>
+                    <span class="font-extrabold tracking-tight">InsightClue</span>
+                    <span class="px-2 py-0.5 rounded-full bg-surface-container text-primary-container text-[11px] font-mono border border-outline-variant/40">
+                        Autonomous v3.4
+                    </span>
+                </div>
+
+                <!-- Global Search Capsule -->
+                <div class="hidden md:flex items-center gap-2 bg-surface-container-low px-4 py-1.5 rounded-full border border-outline-variant/30 focus-within:border-primary-container/70 transition-all w-72 lg:w-80">
+                    <span class="material-symbols-outlined text-outline text-[18px]">search</span>
+                    <input id="global-search-input" class="bg-transparent text-xs text-on-surface placeholder:text-outline/70 focus:outline-none w-full border-none p-0" placeholder="Search telemetry, SQL traces, incident vectors..." type="text">
+                    <span class="font-mono text-outline/60 text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded">⌘K</span>
+                </div>
             </div>
-        </div>
-        <div class="header-actions">
-            <div class="dataset-selector-group">
-                <span class="selector-label">📂 Dataset:</span>
-                <select id="dataset-mode-select" class="dataset-select">
-                    <option value="FINTECH_90D">💳 90-Day FinTech Telemetry</option>
-                    <option value="KAGGLE_CFPB">🏛️ CFPB Consumer Grievances (Kaggle)</option>
-                </select>
+
+            <!-- Navigation Links (Desktop) -->
+            <nav class="hidden xl:flex items-center gap-6">
+                <a class="text-primary font-bold border-b-2 border-primary-container pb-1 text-sm" href="#telemetry">Telemetry Deck</a>
+                <a class="text-on-surface-variant font-medium hover:text-on-surface transition-colors pb-1 text-sm" href="#forensics">Forensics Feed</a>
+                <a class="text-on-surface-variant font-medium hover:text-on-surface transition-colors pb-1 text-sm" href="#agents">Multi-Agent Swarm</a>
+            </nav>
+
+            <!-- Trailing Action Cluster -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Dataset Selector Dropdown -->
+                <div class="dataset-selector-group flex items-center gap-1.5 bg-surface-container-low px-3 py-1.5 rounded-full border border-outline-variant/30">
+                    <span class="material-symbols-outlined text-primary-container text-[16px]">folder_open</span>
+                    <select id="dataset-mode-select" class="dataset-select bg-transparent text-xs font-mono text-on-surface focus:outline-none border-none p-0 cursor-pointer">
+                        <option value="FINTECH_90D" class="bg-surface-container-low text-on-surface">💳 90-Day FinTech Telemetry</option>
+                        <option value="KAGGLE_CFPB" class="bg-surface-container-low text-on-surface">🏛️ CFPB Consumer Grievances</option>
+                    </select>
+                </div>
+
+                <!-- Live SSE Beacon -->
+                <div class="hidden sm:flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-full border border-outline-variant/30">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-container opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-primary-container"></span>
+                    </span>
+                    <span id="system-health-chip" class="font-mono text-on-surface text-[11px]">Live 99.98%</span>
+                </div>
+
+                <!-- Ingest Custom Dataset Trigger -->
+                <button id="btn-open-upload-modal" class="pill-btn hover:border-primary-container text-xs" title="Ingest Custom Dataset (.csv, .json, .sqlite, .parquet)">
+                    <span class="material-symbols-outlined text-[15px] text-primary-container">upload_file</span>
+                    <span class="hidden sm:inline">Upload Dataset</span>
+                </button>
+
+                <!-- Scan Detect CTA -->
+                <button id="btn-scan-detect" class="btn-neon-primary text-xs py-2 px-3.5">
+                    <span class="material-symbols-outlined text-[16px]">bolt</span>
+                    <span>Scan Detect</span>
+                </button>
+
+                <!-- Swagger API Link -->
+                <a href="/docs" target="_blank" class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary-container/60 border border-outline-variant/30 transition-all" title="Swagger REST Documentation">
+                    <span class="material-symbols-outlined text-[18px]">menu_book</span>
+                </a>
             </div>
-            <button id="btn-scan-detect" class="btn btn-primary">
-                ⚡ Run Detection Scan
-            </button>
-            <button id="btn-ingest-cfpb" class="btn btn-purple">
-                📂 Ingest CFPB Kaggle Data
-            </button>
-            <a href="/docs" target="_blank" class="btn btn-secondary">
-                📖 Swagger API
-            </a>
         </div>
     </header>
 
-    <!-- System / Docker Offline Alert Banner -->
-    <div id="system-offline-banner" class="system-alert-banner hidden">
-        <div class="alert-banner-content">
-            <div class="alert-icon-wrapper">
-                <span class="alert-icon">⚠️</span>
-            </div>
-            <div class="alert-body">
-                <div class="alert-title-row">
-                    <strong class="alert-title">Database Service Offline (Docker Container Unreachable)</strong>
-                    <span class="badge-status-offline">PostgreSQL 5432 Offline</span>
+    <!-- ========================================================================= -->
+    <!-- System / Docker Offline Alert Banner                                     -->
+    <!-- ========================================================================= -->
+    <div id="system-offline-banner" class="system-alert-banner hidden max-w-[1600px] mx-auto w-full px-4 lg:px-12 mt-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-error text-[24px]">warning</span>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <strong class="text-white text-sm">Database Service Offline (Docker Container Unreachable)</strong>
+                        <span class="px-2 py-0.5 rounded-full bg-error-container text-error text-[10px] font-mono font-bold">PostgreSQL 5432 Offline</span>
+                    </div>
+                    <p class="text-xs text-on-surface-variant mt-1" id="offline-banner-msg">
+                        The backend database engine is not responding. Ensure Docker Desktop is running:
+                    </p>
+                    <div class="flex items-center gap-2 mt-2">
+                        <code id="docker-cmd-text" class="bg-surface-container-lowest px-2.5 py-1 rounded font-mono text-xs text-primary-container border border-outline-variant/30">docker-compose up -d</code>
+                        <button id="btn-copy-docker-cmd" class="pill-btn text-[11px] py-1 px-2.5">
+                            <span class="material-symbols-outlined text-[13px]">content_copy</span> Copy
+                        </button>
+                    </div>
                 </div>
-                <p class="alert-desc" id="offline-banner-msg">
-                    The backend database engine is not responding. Please make sure Docker Desktop is started and the database container is running:
-                </p>
-                <div class="alert-cmd-box">
-                    <code id="docker-cmd-text">docker-compose up -d</code>
-                    <button id="btn-copy-docker-cmd" class="btn btn-xs btn-outline" title="Copy command to clipboard">
-                        📋 Copy Command
-                    </button>
+            </div>
+            <button id="btn-retry-health" class="btn-neon-primary text-xs py-2 px-4 shrink-0">
+                <span id="retry-spinner" class="hidden material-symbols-outlined animate-spin text-[16px]">sync</span>
+                <span id="retry-btn-label">🔄 Retry Connection</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MAIN WORKSPACE: 12-Column Responsive Cockpit Engine                       -->
+    <!-- ========================================================================= -->
+    <main class="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 py-6 space-y-6 relative z-10">
+
+        <!-- Guided 4-Step Interactive Workflow Ribbon -->
+        <section class="workflow-ribbon">
+            <div class="ribbon-step active" id="step-1">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    <strong>Detect Anomalies</strong>
+                    <span>Isolation Forest &amp; Rolling Z-Score</span>
                 </div>
             </div>
-            <div class="alert-actions">
-                <button id="btn-retry-health" class="btn btn-sm btn-primary">
-                    <span class="btn-spinner hidden" id="retry-spinner">⏳</span>
-                    <span id="retry-btn-label">🔄 Retry Connection</span>
+            <div class="step-arrow">➔</div>
+            <div class="ribbon-step" id="step-2">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    <strong>Select Incident</strong>
+                    <span>Review flagged telemetry feed</span>
+                </div>
+            </div>
+            <div class="step-arrow">➔</div>
+            <div class="ribbon-step" id="step-3">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    <strong>Multi-Agent Squad</strong>
+                    <span>SQL Sandbox &amp; Vector RAG</span>
+                </div>
+            </div>
+            <div class="step-arrow">➔</div>
+            <div class="ribbon-step" id="step-4">
+                <div class="step-num">4</div>
+                <div class="step-text">
+                    <strong>Executive RCA</strong>
+                    <span>Synthesized Root Cause Report</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- HERO SECTION: ORION "YOUR INCIDENT MATCH" STAGE -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch" id="telemetry">
+            <!-- Left Column: Incident Match Headline & Filters (5 cols) -->
+            <div class="lg:col-span-5 flex flex-col justify-between space-y-4 bg-surface-container-low/70 backdrop-blur-xl p-6 lg:p-8 rounded-lg border border-outline-variant/30 shadow-2xl relative overflow-hidden">
+                <div class="absolute -top-24 -left-24 w-72 h-72 bg-primary-container/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="space-y-3 relative z-10">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-high border border-outline-variant/40 text-primary-container text-xs font-mono">
+                        <span class="material-symbols-outlined text-[14px]">radar</span>
+                        <span>LangGraph Swarm v4.2 • Autonomous Inception</span>
+                    </div>
+                    <h1 class="text-3xl lg:text-4xl font-extrabold text-primary tracking-tight leading-tight uppercase font-sans">
+                        YOUR INCIDENT<br>
+                        <span class="text-primary-container underline decoration-primary-container/30 underline-offset-8">MATCH</span>
+                    </h1>
+                    <p class="text-sm text-on-surface-variant max-w-md" id="hero-status-desc">
+                        Autonomous multi-agent consensus identified statistical divergences across active telemetry partitions.
+                    </p>
+                </div>
+
+                <!-- Pill Segmented Switchers (ORION style) -->
+                <div class="pt-4 space-y-2 relative z-10">
+                    <span class="font-mono text-outline text-[11px] font-bold tracking-wider uppercase block">
+                        Investigation Slices &amp; Severity Filters
+                    </span>
+                    <div class="flex flex-wrap gap-2" id="filter-pills-group">
+                        <button class="pill-btn active filter-btn" data-filter="ALL">
+                            <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                            <span>All Slices</span>
+                        </button>
+                        <button class="pill-btn filter-btn" data-filter="CRITICAL">
+                            <span class="w-2 h-2 rounded-full bg-error"></span>
+                            <span>Critical SEV-1</span>
+                        </button>
+                        <button class="pill-btn filter-btn" data-filter="HIGH">
+                            <span class="w-2 h-2 rounded-full bg-warning"></span>
+                            <span>High SEV-2</span>
+                        </button>
+                        <button class="pill-btn filter-btn" data-filter="MEDIUM">
+                            <span class="w-2 h-2 rounded-full bg-secondary"></span>
+                            <span>Medium SEV-3</span>
+                        </button>
+                    </div>
+
+                    <!-- Sub-action trigger bar -->
+                    <div class="pt-2">
+                        <button id="btn-trigger-autonomous-sweep" class="w-full bg-surface-container-high hover:bg-surface-bright text-primary px-4 py-2.5 rounded-full border border-outline-variant/40 flex items-center justify-between text-xs font-semibold transition-all">
+                            <span class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary-container text-[18px]">sync</span>
+                                <span>Trigger Autonomous Sweep</span>
+                            </span>
+                            <span class="font-mono text-outline text-[10px]">AUTO-RESOLVE</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center & Right: Topographical Telemetry Visual Stage (7 cols) -->
+            <div class="lg:col-span-7 bg-surface-container-low/90 backdrop-blur-2xl rounded-lg border border-outline-variant/30 p-6 flex flex-col justify-between relative overflow-hidden mesh-gradient-bg shadow-2xl">
+                <!-- Header row: Live Metric Chips -->
+                <div class="flex flex-wrap items-center justify-between gap-3 relative z-10">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-primary-container neon-glow-lime animate-pulse"></span>
+                        <span class="text-lg text-primary font-bold">Topographical Variance Topography</span>
+                        <span class="font-mono text-outline text-[11px] bg-surface-container px-2 py-0.5 rounded-full">GRID-389</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="bg-surface-container/80 backdrop-blur-md px-3 py-1 rounded-full border border-outline-variant/30 flex items-center gap-2 font-mono text-xs">
+                            <span class="text-outline">Delta</span>
+                            <span class="text-error font-bold" id="topo-delta-val">-19.60%</span>
+                        </div>
+                        <div class="bg-surface-container/80 backdrop-blur-md px-3 py-1 rounded-full border border-outline-variant/30 flex items-center gap-2 font-mono text-xs">
+                            <span class="text-outline">Auth Rate</span>
+                            <span class="text-primary-container font-bold" id="topo-auth-rate">79.2%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3D Geometric Topographical Visual Vector Canvas -->
+                <div class="my-4 relative h-64 sm:h-72 w-full rounded-DEFAULT overflow-hidden border border-outline-variant/20 bg-surface-container-lowest/80 flex items-center justify-center">
+                    <svg class="absolute inset-0 w-full h-full opacity-80" fill="none" preserveAspectRatio="none" viewBox="0 0 700 320">
+                        <defs>
+                            <linearGradient id="meshGradient" x1="0%" x2="100%" y1="0%" y2="100%">
+                                <stop offset="0%" stop-color="#c3f400" stop-opacity="0.85"></stop>
+                                <stop offset="50%" stop-color="#556d00" stop-opacity="0.4"></stop>
+                                <stop offset="100%" stop-color="#121316" stop-opacity="0.05"></stop>
+                            </linearGradient>
+                            <linearGradient id="glowG" x1="0%" x2="0%" y1="100%" y2="0%">
+                                <stop offset="0%" stop-color="#c3f400" stop-opacity="0"></stop>
+                                <stop offset="100%" stop-color="#c3f400" stop-opacity="0.25"></stop>
+                            </linearGradient>
+                        </defs>
+                        <!-- Perspective grid lines -->
+                        <path d="M0,280 L700,280 M0,240 L700,240 M0,200 L700,200 M0,160 L700,160" stroke="#343538" stroke-dasharray="3 3" stroke-width="0.8"></path>
+                        <!-- Terrain contours -->
+                        <path d="M20,270 Q140,260 220,230 T400,160 T560,90 T680,85" fill="none" stroke="url(#meshGradient)" stroke-width="2"></path>
+                        <path d="M20,250 Q160,240 260,200 T440,130 T590,70 T680,65" fill="none" stroke="#c3f400" stroke-width="2.5"></path>
+                        <path d="M20,230 Q180,210 300,170 T480,95 T620,50 T680,45" fill="none" stroke="url(#meshGradient)" stroke-width="1.8"></path>
+                        <!-- Canyon drop -->
+                        <path d="M300,170 C340,250 420,290 490,285 C560,280 610,180 620,50 L480,95 Z" fill="url(#glowG)" stroke="#c3f400" stroke-dasharray="4 2" stroke-width="1.2"></path>
+                        <!-- Anomaly Epicenter Pin -->
+                        <circle class="neon-glow-lime animate-pulse" cx="430" cy="245" fill="#c3f400" r="7"></circle>
+                        <circle cx="430" cy="245" opacity="0.6" r="18" stroke="#c3f400" stroke-dasharray="2 2" stroke-width="1"></circle>
+                        <line opacity="0.7" stroke="#c3f400" stroke-dasharray="2 4" stroke-width="1" x1="430" x2="430" y1="245" y2="40"></line>
+                        <line stroke="#8e9379" stroke-dasharray="2 4" stroke-width="0.8" x1="260" x2="260" y1="200" y2="100"></line>
+                        <line stroke="#8e9379" stroke-dasharray="2 4" stroke-width="0.8" x1="590" x2="590" y1="70" y2="20"></line>
+                    </svg>
+                    <canvas id="chart-timeseries" class="hidden"></canvas>
+
+                    <!-- Floating Glass Data HUD -->
+                    <div class="absolute top-3 left-3 bg-surface-container-lowest/85 backdrop-blur-md p-2.5 rounded-DEFAULT border border-outline-variant/40 space-y-0.5">
+                        <span class="font-mono text-outline uppercase block text-[10px]">Gateway Telemetry Focus</span>
+                        <div class="text-sm font-bold text-primary" id="hud-focus-title">HDFC 3DS Core</div>
+                        <div class="flex items-center gap-1 font-mono text-[11px] text-error" id="hud-focus-sub">
+                            <span class="material-symbols-outlined text-[13px]">trending_down</span>
+                            <span>Auth Dip: -19.6%</span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Right Anomaly Stat Overlay -->
+                    <div class="absolute bottom-3 right-3 bg-surface-container-lowest/85 backdrop-blur-md p-2.5 rounded-DEFAULT border border-outline-variant/40 flex items-center gap-3">
+                        <div>
+                            <span class="font-mono text-outline block text-[9px]">ORION INDEX</span>
+                            <span class="text-sm font-extrabold text-primary-container" id="hud-orion-index">0.27*</span>
+                        </div>
+                        <div class="h-6 w-[1px] bg-outline-variant/40"></div>
+                        <div>
+                            <span class="font-mono text-outline block text-[9px]">OUTLIER LOGS</span>
+                            <span class="text-sm font-extrabold text-primary" id="hud-outlier-count">8,574</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Telemetry Bottom Bar Overlay: 3 Micro Metrics -->
+                <div class="grid grid-cols-3 gap-2 pt-1 relative z-10">
+                    <div class="bg-surface-container-high/60 backdrop-blur-sm p-2.5 rounded-DEFAULT border border-outline-variant/20 flex flex-col justify-between">
+                        <span class="font-mono text-outline text-[10px]">Spend Drop</span>
+                        <span class="text-base text-error font-extrabold tracking-tight" id="micro-spend-drop">-$1.42M</span>
+                        <span class="font-mono text-on-surface-variant text-[10px]">Gross Delta</span>
+                    </div>
+                    <div class="bg-surface-container-high/60 backdrop-blur-sm p-2.5 rounded-DEFAULT border border-outline-variant/20 flex flex-col justify-between">
+                        <span class="font-mono text-outline text-[10px]">Latency p99</span>
+                        <span class="text-base text-primary font-extrabold tracking-tight" id="micro-latency-p99">1,850ms</span>
+                        <span class="font-mono text-secondary text-[10px]">+1,420ms Spike</span>
+                    </div>
+                    <div class="bg-surface-container-high/60 backdrop-blur-sm p-2.5 rounded-DEFAULT border border-outline-variant/20 flex flex-col justify-between">
+                        <span class="font-mono text-outline text-[10px]">Confidence</span>
+                        <span class="text-base text-primary-container font-extrabold tracking-tight" id="micro-consensus-score">96.4%</span>
+                        <span class="font-mono text-on-surface-variant text-[10px]">LangGraph Swarm</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- TELEMETRY KPI PILL CARDS                                                  -->
+        <!-- ========================================================================= -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Card 1: 90-Day Gross Volume -->
+            <div class="bg-surface-container-low/70 backdrop-blur-md p-4 rounded-lg border border-outline-variant/30 hover:border-primary-container/40 transition-all flex flex-col justify-between group">
+                <div class="flex items-center justify-between text-outline font-mono text-xs">
+                    <span id="kpi-title-1">90-DAY GROSS VOLUME</span>
+                    <span class="material-symbols-outlined text-[18px] group-hover:text-primary-container transition-colors">north_east</span>
+                </div>
+                <div class="my-2">
+                    <div class="text-2xl font-extrabold text-primary" id="kpi-total-spend">$142.8M</div>
+                    <div class="text-xs text-outline flex items-center gap-1 mt-1" id="kpi-sub-1">
+                        <span class="text-primary-container font-semibold">+4.2%</span> vs baseline
+                    </div>
+                </div>
+                <div class="h-6 w-full pt-1">
+                    <svg class="w-full h-full" fill="none" viewBox="0 0 160 24">
+                        <path d="M0,18 Q30,14 60,19 T120,8 T160,5" fill="none" stroke="#c3f400" stroke-width="2"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Card 2: Auth Success Rate -->
+            <div class="bg-surface-container-low/70 backdrop-blur-md p-4 rounded-lg border border-outline-variant/30 hover:border-primary-container/40 transition-all flex flex-col justify-between group">
+                <div class="flex items-center justify-between text-outline font-mono text-xs">
+                    <span id="kpi-title-2">AUTH SUCCESS RATE</span>
+                    <span class="px-2 py-0.5 rounded-full bg-error-container/40 text-error text-[10px] font-bold">ANOMALY</span>
+                </div>
+                <div class="my-2">
+                    <div class="text-2xl font-extrabold text-error" id="kpi-success-rate">79.20%</div>
+                    <div class="text-xs text-outline flex items-center gap-1 mt-1" id="kpi-sub-2">
+                        <span>Baseline 98.80%</span>
+                        <span class="text-error font-mono">(-19.6%)</span>
+                    </div>
+                </div>
+                <div class="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden">
+                    <div class="bg-error h-full rounded-full transition-all duration-500" id="kpi-sr-progress" style="width: 79.2%"></div>
+                </div>
+            </div>
+
+            <!-- Card 3: Total Transactions / Records -->
+            <div class="bg-surface-container-low/70 backdrop-blur-md p-4 rounded-lg border border-outline-variant/30 hover:border-primary-container/40 transition-all flex flex-col justify-between group">
+                <div class="flex items-center justify-between text-outline font-mono text-xs">
+                    <span id="kpi-title-3">TOTAL TRANSACTIONS</span>
+                    <span class="material-symbols-outlined text-[18px] group-hover:text-primary-container transition-colors">scatter_plot</span>
+                </div>
+                <div class="my-2">
+                    <div class="text-2xl font-extrabold text-primary" id="kpi-total-tx">21,840</div>
+                    <div class="text-xs text-outline flex items-center gap-1 mt-1" id="kpi-sub-3">
+                        <span class="text-primary-container font-semibold" id="kpi-open-anomalies">8,574</span> anomalies tracked
+                    </div>
+                </div>
+                <div class="h-6 w-full flex items-end gap-1 pt-1">
+                    <span class="flex-1 bg-surface-container-highest h-2 rounded-t-sm"></span>
+                    <span class="flex-1 bg-surface-container-highest h-3 rounded-t-sm"></span>
+                    <span class="flex-1 bg-surface-container-highest h-4 rounded-t-sm"></span>
+                    <span class="flex-1 bg-primary-container h-6 rounded-t-sm neon-glow-subtle"></span>
+                    <span class="flex-1 bg-surface-container-highest h-3 rounded-t-sm"></span>
+                    <span class="flex-1 bg-surface-container-highest h-2 rounded-t-sm"></span>
+                </div>
+            </div>
+
+            <!-- Card 4: AI Agent Swarm State -->
+            <div class="bg-surface-container-low/70 backdrop-blur-md p-4 rounded-lg border border-outline-variant/30 hover:border-primary-container/40 transition-all flex flex-col justify-between group">
+                <div class="flex items-center justify-between text-outline font-mono text-xs">
+                    <span>AI AGENT SWARM</span>
+                    <span class="px-2 py-0.5 rounded-full bg-primary-container/20 text-primary-container text-[10px] font-bold">ALL SYNCHED</span>
+                </div>
+                <div class="my-2">
+                    <div class="text-2xl font-extrabold text-primary">3 Active</div>
+                    <div class="text-xs text-outline flex items-center gap-1 mt-1 truncate">
+                        SafeSQL + pgvector + Synth
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-ping"></span>
+                    <span class="font-mono text-outline text-[10px]">LangGraph Loop Cycle: 420ms</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- INCIDENT FORENSIC FEED & ANOMALIES SECTION                                -->
+        <!-- ========================================================================= -->
+        <section class="space-y-4" id="forensics">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <span class="font-mono text-primary-container uppercase text-[11px] block font-bold">
+                        Synthesized Forensics Feed
+                    </span>
+                    <h2 class="text-xl sm:text-2xl font-bold text-primary tracking-tight">
+                        Root Cause Dossiers &amp; Incident Matches
+                    </h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="font-mono text-outline text-xs">Sort By:</span>
+                    <select id="anomaly-sort-select" class="bg-surface-container px-3 py-1.5 rounded-full border border-outline-variant/30 text-on-surface font-mono text-xs focus:outline-none cursor-pointer">
+                        <option value="CONFIDENCE_DESC">Highest Confidence</option>
+                        <option value="SEVERITY_DESC">Severity (Critical First)</option>
+                        <option value="DATE_DESC">Most Recent</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Dynamic Anomaly Incident Cards List -->
+            <div id="anomalies-container" class="space-y-4">
+                <!-- Fallback / Loading Skeleton -->
+                <div class="p-8 text-center bg-surface-container-low/70 rounded-lg border border-outline-variant/30 text-outline">
+                    <span class="material-symbols-outlined text-[32px] animate-spin text-primary-container">sync</span>
+                    <p class="mt-2 text-sm">Loading incident telemetry feed...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- MULTI-AGENT FORENSIC PROOF & EXECUTIVE ACTION TRAY                        -->
+        <!-- ========================================================================= -->
+        <section class="space-y-4" id="agents">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <span class="font-mono text-primary-container uppercase text-[11px] block font-bold">
+                        Autonomous Forensic Execution
+                    </span>
+                    <h2 class="text-xl sm:text-2xl font-bold text-primary tracking-tight">
+                        Live Multi-Agent Investigation Console
+                    </h2>
+                </div>
+
+                <!-- Agent Stepper Chips -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="stepper-node" id="node-supervisor">
+                        <span class="material-symbols-outlined text-[14px]">psychology</span>
+                        <span>Lead Detective</span>
+                    </div>
+                    <div class="stepper-node" id="node-sql">
+                        <span class="material-symbols-outlined text-[14px]">terminal</span>
+                        <span>SQL Analyst</span>
+                    </div>
+                    <div class="stepper-node" id="node-vector">
+                        <span class="material-symbols-outlined text-[14px]">forum</span>
+                        <span>Support Vector</span>
+                    </div>
+                    <div class="stepper-node" id="node-synthesizer">
+                        <span class="material-symbols-outlined text-[14px]">summarize</span>
+                        <span>RCA Synthesizer</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                <!-- Left: Live Event Terminal Stream (7 cols) -->
+                <div class="lg:col-span-7 bg-surface-container-low/80 backdrop-blur-xl p-5 rounded-lg border border-outline-variant/30 space-y-3 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between pb-2 border-b border-outline-variant/20">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary-container text-[20px]">terminal</span>
+                                <span class="text-base text-primary font-bold">Real-time SSE Investigation Stream</span>
+                            </div>
+                            <span class="px-2.5 py-0.5 rounded-full bg-surface-container-high text-primary-container font-mono text-[10px] border border-primary-container/30">
+                                LANGGRAPH SSE
+                            </span>
+                        </div>
+                        <p class="text-xs text-on-surface-variant mt-2">
+                            Observing multi-agent reasoning, blackboard state transitions, and AST-validated sandbox execution:
+                        </p>
+                    </div>
+
+                    <!-- Monospace Stream Terminal -->
+                    <div id="terminal-log" class="terminal-window my-2">
+                        <div class="text-outline text-xs italic">// Awaiting active incident selection. Click 'Inspect Dossier' or 'Scan Detect' to start multi-agent investigation.</div>
+                    </div>
+
+                    <!-- Proof Sandbox: SafeSQL Output Viewer -->
+                    <div class="mt-2 p-3 bg-surface-container-lowest rounded-DEFAULT border border-outline-variant/30">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-mono text-xs text-secondary font-bold flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[15px]">code</span>
+                                <span>SafeSQL Sandboxed Query</span>
+                            </span>
+                            <button id="btn-copy-sql" class="pill-btn text-[10px] py-0.5 px-2">
+                                <span class="material-symbols-outlined text-[12px]">content_copy</span> Copy SQL
+                            </button>
+                        </div>
+                        <pre id="safesql-output-box" class="font-mono text-xs text-on-surface overflow-x-auto whitespace-pre-wrap">-- No active SQL query executed yet</pre>
+                    </div>
+                </div>
+
+                <!-- Right: Vector Proof & Executive RCA Report Dossier (5 cols) -->
+                <div class="lg:col-span-5 bg-surface-container-low/80 backdrop-blur-xl p-5 rounded-lg border border-outline-variant/30 flex flex-col justify-between space-y-4">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-secondary text-[20px]">forum</span>
+                                <span class="text-base text-primary font-bold">Vector Support Evidence</span>
+                            </div>
+                            <span class="font-mono text-outline text-[11px]" id="vector-match-score">pgvector cosine match</span>
+                        </div>
+
+                        <!-- Customer Complaint RAG Citation Box -->
+                        <div id="rag-citation-box" class="p-3 bg-surface-container rounded-DEFAULT border-l-2 border-primary-container space-y-1">
+                            <p class="text-xs text-on-surface italic" id="rag-quote-text">
+                                "Select an incident to view corroborated customer complaint tickets and semantic clusters."
+                            </p>
+                            <span class="font-mono text-outline text-[10px] block" id="rag-ticket-meta">
+                                Awaiting citation...
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Synthesized RCA Markdown Report Container -->
+                    <div class="space-y-2 flex-1 flex flex-col justify-between">
+                        <div class="flex items-center justify-between">
+                            <span class="font-mono text-xs text-primary-container font-bold flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]">description</span>
+                                <span>Executive RCA Dossier</span>
+                            </span>
+                            <button id="btn-copy-report" class="pill-btn text-[10px] py-0.5 px-2">
+                                <span class="material-symbols-outlined text-[12px]">content_copy</span> Copy Markdown
+                            </button>
+                        </div>
+                        <div id="report-container" class="terminal-window flex-1 rca-report-body min-h-[220px]">
+                            <div class="text-outline text-xs italic">// Synthesized executive RCA report will appear here once agents conclude investigation.</div>
+                        </div>
+                    </div>
+
+                    <!-- Mitigation Actions Tray -->
+                    <div class="space-y-2 pt-2 border-t border-outline-variant/20">
+                        <button id="btn-deploy-runbook" class="w-full btn-neon-primary py-2.5 text-xs">
+                            <span class="material-symbols-outlined text-[16px]">play_circle</span>
+                            <span>Deploy Mitigation Runbook</span>
+                        </button>
+                        <button id="btn-export-briefing" class="w-full btn-glass-secondary py-2 text-xs">
+                            <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+                            <span>Export Executive Briefing</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========================================================================= -->
+    <!-- DYNAMIC DATASET INGESTION MODAL                                           -->
+    <!-- ========================================================================= -->
+    <div id="upload-dataset-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="p-5 border-b border-outline-variant/30 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary-container text-[22px]">cloud_upload</span>
+                    <h3 class="text-lg font-bold text-white">Universal Dynamic Dataset Ingestion</h3>
+                </div>
+                <button id="btn-close-upload-modal" class="text-outline hover:text-white transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <!-- Drop Zone -->
+                <div id="file-drop-zone" class="border-2 border-dashed border-outline-variant/50 hover:border-primary-container/70 rounded-lg p-6 text-center cursor-pointer transition-all bg-surface-container-lowest/60">
+                    <span class="material-symbols-outlined text-[36px] text-primary-container">upload_file</span>
+                    <p class="text-sm font-semibold text-white mt-2">Drop your CSV, JSON, SQLite, or Parquet file here</p>
+                    <p class="text-xs text-outline mt-1">Files up to 50MB supported • Instant heuristic schema inference</p>
+                    <input type="file" id="dataset-file-input" class="hidden" accept=".csv,.json,.sqlite,.db,.parquet">
+                </div>
+
+                <!-- Inferred Schema Preview Table Container -->
+                <div id="schema-preview-container" class="hidden space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="font-mono text-xs text-primary-container font-bold">Inferred Schema Mapping:</span>
+                        <span class="font-mono text-xs text-outline" id="inferred-dataset-name"></span>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-surface-container-lowest p-3 rounded border border-outline-variant/30 text-xs font-mono">
+                        <div>
+                            <label class="text-outline block mb-1">Timestamp Column:</label>
+                            <select id="map-timestamp-col" class="w-full bg-surface-container p-1.5 rounded text-white border border-outline-variant/30"></select>
+                        </div>
+                        <div>
+                            <label class="text-outline block mb-1">Primary Metric Column:</label>
+                            <select id="map-primary-metric-col" class="w-full bg-surface-container p-1.5 rounded text-white border border-outline-variant/30"></select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="text-outline block mb-1">Narrative Text Column (FastEmbed ONNX):</label>
+                            <select id="map-narrative-col" class="w-full bg-surface-container p-1.5 rounded text-white border border-outline-variant/30"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ingestion Status Bar -->
+                <div id="ingestion-progress-bar" class="hidden space-y-1">
+                    <div class="flex justify-between text-xs font-mono text-outline">
+                        <span id="ingestion-status-text">Ingesting records...</span>
+                        <span id="ingestion-pct">0%</span>
+                    </div>
+                    <div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+                        <div id="ingestion-progress-fill" class="bg-primary-container h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-surface-container-lowest border-t border-outline-variant/30 flex justify-end gap-3">
+                <button id="btn-cancel-upload" class="btn-glass-secondary text-xs py-2 px-4">Cancel</button>
+                <button id="btn-confirm-ingestion" class="btn-neon-primary text-xs py-2 px-5 disabled:opacity-50" disabled>
+                    <span>Confirm &amp; Ingest</span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Guided 4-Step Interactive Workflow Ribbon -->
-    <section class="workflow-ribbon">
-        <div class="ribbon-step active" id="step-1">
-            <div class="step-num">1</div>
-            <div class="step-text">
-                <strong>Detect Anomalies</strong>
-                <span>Statistical & Isolation Forest</span>
+    <!-- ========================================================================= -->
+    <!-- FOOTER                                                                    -->
+    <!-- ========================================================================= -->
+    <footer class="mt-12 border-t border-outline-variant/30 bg-surface-container-lowest py-5 text-on-surface-variant">
+        <div class="max-w-[1600px] mx-auto px-4 lg:px-12 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <span class="font-extrabold text-primary text-sm">InsightClue</span>
+                <span class="text-outline text-xs">• Autonomous AI Data Detective &amp; Forensic RCA Cockpit</span>
+            </div>
+            <div class="flex items-center gap-4 font-mono text-outline text-[11px]">
+                <span>LangGraph Swarm v4.2</span>
+                <span>•</span>
+                <span>PostgreSQL 16 + pgvector</span>
+                <span>•</span>
+                <span class="text-primary-container font-semibold">Node Health: 100% OK</span>
             </div>
         </div>
-        <div class="step-arrow">➔</div>
-        <div class="ribbon-step" id="step-2">
-            <div class="step-num">2</div>
-            <div class="step-text">
-                <strong>Select Incident</strong>
-                <span>Review flagged telemetry</span>
-            </div>
-        </div>
-        <div class="step-arrow">➔</div>
-        <div class="ribbon-step" id="step-3">
-            <div class="step-num">3</div>
-            <div class="step-text">
-                <strong>AI Multi-Agent Squad</strong>
-                <span>SQL sandbox & Vector RAG</span>
-            </div>
-        </div>
-        <div class="step-arrow">➔</div>
-        <div class="ribbon-step" id="step-4">
-            <div class="step-num">4</div>
-            <div class="step-text">
-                <strong>Executive RCA Verdict</strong>
-                <span>Actionable mitigation plan</span>
-            </div>
-        </div>
-    </section>
+    </footer>
 
-    <!-- Main Dashboard Container -->
-    <main class="dashboard-container">
-        <!-- 1. Executive KPI Summary Cards -->
-        <section class="kpi-grid">
-            <div class="kpi-card">
-                <div class="kpi-icon-bg" id="kpi-icon-1">💳</div>
-                <div>
-                    <span id="kpi-title-1" class="kpi-label">90-Day Gross Volume</span>
-                    <span id="kpi-total-spend" class="kpi-value">--</span>
-                    <span id="kpi-sub-1" class="kpi-subtext">Across 4 regions & 5 products</span>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon-bg" id="kpi-icon-2">📊</div>
-                <div>
-                    <span id="kpi-title-2" class="kpi-label">Total Transactions</span>
-                    <span id="kpi-total-tx" class="kpi-value">--</span>
-                    <span id="kpi-sub-2" class="kpi-subtext">21,840 daily metric records</span>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon-bg" id="kpi-icon-3">✅</div>
-                <div>
-                    <span id="kpi-title-3" class="kpi-label">Avg Authorization Rate</span>
-                    <span id="kpi-success-rate" class="kpi-value text-emerald">--</span>
-                    <span id="kpi-sub-3" class="kpi-subtext">Global baseline: 98.5%</span>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon-bg">🚨</div>
-                <div>
-                    <span class="kpi-label">Open Incidents</span>
-                    <span id="kpi-open-anomalies" class="kpi-value text-amber">--</span>
-                    <span class="kpi-subtext">Ready for AI investigation</span>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon-bg">⚡</div>
-                <div>
-                    <span class="kpi-label">Critical Severity</span>
-                    <span id="kpi-critical-anomalies" class="kpi-value text-rose">--</span>
-                    <span class="kpi-subtext">High-priority drops & surges</span>
-                </div>
-            </div>
-        </section>
+    <!-- Toast Notification Hub -->
+    <div id="toast-container"></div>
 
-        <!-- 2. Main Two-Column Workflow Layout -->
-        <div class="main-layout">
-            <!-- Left Column: Timeseries Trends & Flagged Incidents Feed -->
-            <div class="layout-column">
-                <!-- 90-Day Trend Chart Panel -->
-                <section class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title-group">
-                            <span class="panel-icon">📈</span>
-                            <div>
-                                <h2 id="chart-panel-title" class="panel-title">90-Day FinTech Spend & Authorization Trends</h2>
-                                <p id="chart-panel-subtitle" class="panel-subtitle">Monitor authorization rate dips and spend volume fluctuations</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="chart-timeseries"></canvas>
-                    </div>
-                </section>
-
-                <!-- Anomaly Incidents Feed Panel -->
-                <section class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title-group">
-                            <span class="panel-icon">🚨</span>
-                            <div>
-                                <h2 class="panel-title">Detected Incidents Feed</h2>
-                                <p class="panel-subtitle">Select any incident to dispatch the autonomous LangGraph squad</p>
-                            </div>
-                        </div>
-                        <div class="filter-bar">
-                            <button class="filter-btn active" data-filter="ALL">All</button>
-                            <button class="filter-btn" data-filter="CRITICAL">Critical</button>
-                            <button class="filter-btn" data-filter="HIGH">High</button>
-                            <button class="filter-btn" data-filter="OPEN">Open</button>
-                            <button class="filter-btn" data-filter="RESOLVED">Resolved</button>
-                        </div>
-                    </div>
-                    <div id="anomalies-container" class="anomaly-list">
-                        <!-- Loaded dynamically via app.js -->
-                    </div>
-                </section>
-            </div>
-
-            <!-- Right Column: Live Multi-Agent Investigation & Executive RCA Report -->
-            <div class="layout-column">
-                <!-- Live Agent Streaming Console -->
-                <section class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title-group">
-                            <span class="panel-icon">🤖</span>
-                            <div>
-                                <h2 class="panel-title">Live Multi-Agent Investigation Stream</h2>
-                                <p class="panel-subtitle">Autonomous reasoning stream via Server-Sent Events (SSE)</p>
-                            </div>
-                        </div>
-                        <div id="live-indicator" class="live-status-chip idle">
-                            <span class="pulse-dot"></span>
-                            <span id="live-status-text">Squad Idle</span>
-                        </div>
-                    </div>
-
-                    <!-- Multi-Agent Visual Stepper Tracker -->
-                    <div class="agent-stepper">
-                        <div class="stepper-node" id="node-supervisor">
-                            <div class="node-icon">🕵️</div>
-                            <div class="node-label">Supervisor</div>
-                            <div class="node-status">Planner</div>
-                        </div>
-                        <div class="stepper-connector"></div>
-                        <div class="stepper-node" id="node-sql">
-                            <div class="node-icon">🔍</div>
-                            <div class="node-label">SQL Agent</div>
-                            <div class="node-status">Log Telemetry</div>
-                        </div>
-                        <div class="stepper-connector"></div>
-                        <div class="stepper-node" id="node-rag">
-                            <div class="node-icon">🎫</div>
-                            <div class="node-label">Vector RAG</div>
-                            <div class="node-status">Complaints</div>
-                        </div>
-                        <div class="stepper-connector"></div>
-                        <div class="stepper-node" id="node-synthesis">
-                            <div class="node-icon">📑</div>
-                            <div class="node-label">RCA Synthesis</div>
-                            <div class="node-status">Executive Report</div>
-                        </div>
-                    </div>
-
-                    <!-- Live Terminal Output -->
-                    <div id="terminal-log" class="terminal-window">
-                        <div class="terminal-placeholder">
-                            <div class="placeholder-icon">👉</div>
-                            <div class="placeholder-text">
-                                <strong>Ready to investigate</strong><br>
-                                Pick an incident on the left and click <strong>"Investigate"</strong> to launch the AI squad.
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Executive Root Cause Analysis (RCA) Verdict Panel -->
-                <section class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title-group">
-                            <span class="panel-icon">📋</span>
-                            <div>
-                                <h2 class="panel-title">Executive Root Cause Analysis (RCA) Report</h2>
-                                <p class="panel-subtitle">Synthesized findings, confidence score, and remediation steps</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="report-container" class="report-view">
-                        <div class="report-placeholder">
-                            <span>No active investigation report. Run an investigation to view synthesized root causes.</span>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
-    </main>
-
-    <!-- Notification Toast Container -->
-    <div id="toast-container" class="toast-container"></div>
-
-    <!-- Application JavaScript -->
+    <!-- Application Script -->
     <script src="/static/app.js"></script>
 </body>
 </html>
