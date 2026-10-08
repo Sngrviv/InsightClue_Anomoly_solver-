@@ -68,6 +68,8 @@ async def db_connection_exception_handler(request: Request, exc: Exception) -> J
         },
     )
 
+from src.api.routes import api_router, api_v1_router
+
 # Configure CORS Middleware
 app.add_middleware(
     CORSMiddleware,
@@ -77,8 +79,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register API v1 Routers
+# Register API Routers
 app.include_router(api_v1_router)
+app.include_router(api_router)
 
 # Mount Static Dashboard Files
 static_path = Path(__file__).resolve().parent.parent / "static"

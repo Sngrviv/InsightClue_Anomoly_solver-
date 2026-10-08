@@ -125,17 +125,18 @@ async function loadAvailableDatasets() {
             if (Array.isArray(datasets) && datasets.length > 0) {
                 datasetSelect.innerHTML = '';
                 datasets.forEach(ds => {
+                    const dsName = typeof ds === 'string' ? ds : ds.dataset_name;
                     const opt = document.createElement('option');
-                    opt.value = ds.dataset_name;
+                    opt.value = dsName;
                     opt.className = 'bg-surface-container-low text-on-surface';
-                    const icon = ds.dataset_name.includes('CFPB') ? '🏛️' : '💳';
-                    opt.textContent = `${icon} ${ds.dataset_name} (${ds.record_count?.toLocaleString() || 0} rows)`;
+                    const icon = dsName.includes('CFPB') ? '🏛️' : '💳';
+                    opt.textContent = `${icon} ${dsName}`;
                     datasetSelect.appendChild(opt);
                 });
                 if (datasetSelect.querySelector(`option[value="${currentDatasetSource}"]`)) {
                     datasetSelect.value = currentDatasetSource;
                 } else if (datasets[0]) {
-                    currentDatasetSource = datasets[0].dataset_name;
+                    currentDatasetSource = typeof datasets[0] === 'string' ? datasets[0] : datasets[0].dataset_name;
                     datasetSelect.value = currentDatasetSource;
                 }
             }
