@@ -18,6 +18,23 @@ from src.models.investigations import AnomalyEvent, InvestigationReport
 logger = logging.getLogger(__name__)
 
 
+def _format_text_block(val: Any, default: str = "") -> str:
+    """Safely normalizes strings, lists of strings, or lists of dicts into formatted text."""
+    if val is None:
+        return default
+    if isinstance(val, list):
+        items = []
+        for item in val:
+            if isinstance(item, dict):
+                items.append("; ".join(f"{k}: {v}" for k, v in item.items()))
+            else:
+                items.append(str(item))
+        return "\n".join(items) if items else default
+    if isinstance(val, dict):
+        return json.dumps(val)
+    return str(val) or default
+
+
 class InvestigationService:
     """
     Deep module interface for autonomous Root Cause Analysis investigations.
@@ -103,11 +120,8 @@ class InvestigationService:
         # Update anomaly status
         anomaly.status = "RESOLVED"
 
-        raw_rca = final_state.get("root_cause_summary", "Detailed RCA established.")
-        rca_summary = "\n".join(m if isinstance(m, str) else str(m) for m in raw_rca) if isinstance(raw_rca, list) else str(raw_rca)
-
-        raw_mitigation = final_state.get("mitigation_steps", "1. Audit telemetry alerts.")
-        mitigation = "\n".join(m if isinstance(m, str) else str(m) for m in raw_mitigation) if isinstance(raw_mitigation, list) else str(raw_mitigation)
+        rca_summary = _format_text_block(final_state.get("root_cause_summary"), "Detailed RCA established.")
+        mitigation = _format_text_block(final_state.get("mitigation_steps"), "1. Audit telemetry alerts.")
 
         # Create and persist finalized InvestigationReport
         report = InvestigationReport(
@@ -174,10 +188,8 @@ class InvestigationService:
                     yield f"event: ticket_evidence\ndata: {json.dumps(ticket)}\n\n"
 
                 if node_name == "synthesis_agent":
-                    raw_summary = node_state.get("root_cause_summary", "")
-                    summary_str = "\n\n".join(raw_summary) if isinstance(raw_summary, list) else str(raw_summary or "")
-                    raw_mitigation = node_state.get("mitigation_steps", "")
-                    mitigation_str = "\n".join(raw_mitigation) if isinstance(raw_mitigation, list) else str(raw_mitigation or "")
+                    summary_str = _format_text_block(node_state.get("root_cause_summary"), "")
+                    mitigation_str = _format_text_block(node_state.get("mitigation_steps"), "")
 
                     rca_payload = {
                         "root_cause_summary": summary_str,
