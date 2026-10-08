@@ -55,6 +55,183 @@ class AnomalyDetectionEngine:
         self.z_score_threshold = z_score_threshold
         self.isolation_forest_contamination = isolation_forest_contamination
 
+    def _preprocess_slice(
+        self,
+        slice_raw: pd.DataFrame,
+        region: str,
+        product: str,
+        tier: str,
+        fill_calendar_gaps: bool,
+    ) -> tuple[pd.DataFrame, set[date]]:
+        """Sorts, deduplicates, and optionally performs continuous calendar gap-filling on a timeseries slice."""
+        slice_df = slice_raw.sort_values(by="parsed_date").drop_duplicates(subset=["parsed_date"]).copy()
+        observed_dates = set(slice_df["parsed_date"])
+
+        if fill_calendar_gaps and len(slice_df) >= 3:
+            min_d = slice_df["parsed_date"].min()
+            max_d = slice_df["parsed_date"].max()
+            full_range = pd.date_range(min_d, max_d, freq="D").date
+            slice_df = slice_df.set_index("parsed_date").reindex(full_range)
+            slice_df.index.name = "parsed_date"
+
+            slice_df["region"] = slice_df["region"].ffill().bfill().fillna(region)
+            slice_df["product_name"] = slice_df["product_name"].ffill().bfill().fillna(product)
+            slice_df["customer_tier"] = slice_df["customer_tier"].ffill().bfill().fillna(tier)
+
+            for col in ["success_rate_pct", "avg_latency_ms", "chargeback_rate_pct", "avg_fraud_risk_score"]:
+                if col in slice_df.columns:
+                    slice_df[col] = slice_df[col].ffill().bfill()
+
+            for col in ["daily_spend_amount", "transaction_count"]:
+                if col in slice_df.columns:
+                    slice_df[col] = slice_df[col].fillna(0.0)
+
+            slice_df = slice_df.reset_index()
+
+        return slice_df, observed_dates
+
+    def _compute_rolling_baselines(self, slice_df: pd.DataFrame) -> pd.DataFrame:
+        """Calculates dynamic rolling window means, standard deviations, and Z-scores across metrics."""
+        slice_len = len(slice_df)
+        min_p = min(3, slice_len)
+        win = min(self.rolling_window_days, slice_len)
+
+        if "success_rate_pct" in slice_df.columns:
+            r_mean = slice_df["success_rate_pct"].rolling(window=win, min_periods=min_p).mean()
+            r_std = slice_df["success_rate_pct"].rolling(window=win, min_periods=min_p).std().replace(0, 0.05).fillna(0.05)
+            slice_df["z_sr"] = ((slice_df["success_rate_pct"] - r_mean) / r_std).fillna(0)
+            slice_df["expected_sr"] = r_mean.fillna(slice_df["success_rate_pct"])
+
+        if "avg_latency_ms" in slice_df.columns:
+            r_mean = slice_df["avg_latency_ms"].rolling(window=win, min_periods=min_p).mean()
+            r_std = slice_df["avg_latency_ms"].rolling(window=win, min_periods=min_p).std().replace(0, 5.0).fillna(5.0)
+            slice_df["z_lat"] = ((slice_df["avg_latency_ms"] - r_mean) / r_std).fillna(0)
+            slice_df["expected_lat"] = r_mean.fillna(slice_df["avg_latency_ms"])
+
+        if "chargeback_rate_pct" in slice_df.columns:
+            r_mean = slice_df["chargeback_rate_pct"].rolling(window=win, min_periods=min_p).mean()
+            r_std = slice_df["chargeback_rate_pct"].rolling(window=win, min_periods=min_p).std().replace(0, 0.05).fillna(0.05)
+            slice_df["z_cb"] = ((slice_df["chargeback_rate_pct"] - r_mean) / r_std).fillna(0)
+            slice_df["expected_cb"] = r_mean.fillna(slice_df["chargeback_rate_pct"])
+
+        return slice_df
+
+    def _fit_isolation_forest(self, slice_df: pd.DataFrame) -> pd.DataFrame:
+        """Fits multi-variate IsolationForest for multidimensional outlier detection."""
+        feature_cols = [c for c in ["success_rate_pct", "avg_latency_ms", "chargeback_rate_pct", "daily_spend_amount"] if c in slice_df.columns]
+        slice_df["iso_score"] = 0.0
+        slice_df["is_iso_anom"] = False
+
+        if len(feature_cols) >= 2 and len(slice_df) >= 7:
+            try:
+                iso = IsolationForest(
+                    contamination=self.isolation_forest_contamination,
+                    random_state=42,
+                    n_estimators=50,
+                )
+                clean_features = slice_df[feature_cols].fillna(0.0)
+                preds = iso.fit_predict(clean_features)
+                scores = iso.decision_function(clean_features)
+                slice_df["iso_score"] = scores
+                slice_df["is_iso_anom"] = preds == -1
+            except Exception as e:
+                logger.debug(f"[AnomalyEngine] IsolationForest skipped: {e}")
+
+        return slice_df
+
+    def _extract_slice_signals(
+        self,
+        slice_df: pd.DataFrame,
+        observed_dates: set[date],
+        region: str,
+        product: str,
+        tier: str,
+    ) -> list[AnomalySignal]:
+        """Extracts and severity-ranks individual AnomalySignal events for observed dates."""
+        signals: list[AnomalySignal] = []
+
+        for _, row in slice_df.iterrows():
+            dt = row["parsed_date"]
+            if dt not in observed_dates:
+                continue
+
+            iso_sc = float(row.get("iso_score", 0.0))
+            is_iso = bool(row.get("is_iso_anom", False))
+
+            if "success_rate_pct" in row:
+                actual = float(row["success_rate_pct"])
+                expected = float(row.get("expected_sr", 99.0))
+                z_val = float(row.get("z_sr", 0.0))
+
+                if (z_val <= -self.z_score_threshold and (actual <= expected - 2.0 or actual <= 95.0)) or actual <= 85.0 or (is_iso and actual <= 92.0):
+                    dev_pct = ((actual - expected) / expected) * 100.0 if expected > 0 else -50.0
+                    severity = "CRITICAL" if actual <= 80.0 or z_val <= -3.5 else "HIGH"
+                    signals.append(
+                        AnomalySignal(
+                            metric_date=dt,
+                            region=region,
+                            product_name=product,
+                            customer_tier=tier,
+                            metric_name="success_rate_plunge",
+                            actual_value=actual,
+                            expected_value=round(expected, 2),
+                            deviation_pct=round(dev_pct, 2),
+                            z_score=round(z_val, 2),
+                            isolation_score=round(iso_sc, 4),
+                            severity=severity,
+                        )
+                    )
+
+            if "avg_latency_ms" in row:
+                actual = float(row["avg_latency_ms"])
+                expected = float(row.get("expected_lat", 200.0))
+                z_val = float(row.get("z_lat", 0.0))
+
+                if (z_val >= self.z_score_threshold and actual >= 500.0) or actual >= 1500.0 or (is_iso and actual >= 800.0):
+                    dev_pct = ((actual - expected) / expected) * 100.0 if expected > 0 else 100.0
+                    severity = "CRITICAL" if actual >= 2000.0 or z_val >= 4.0 else "HIGH"
+                    signals.append(
+                        AnomalySignal(
+                            metric_date=dt,
+                            region=region,
+                            product_name=product,
+                            customer_tier=tier,
+                            metric_name="avg_latency_surge",
+                            actual_value=actual,
+                            expected_value=round(expected, 2),
+                            deviation_pct=round(dev_pct, 2),
+                            z_score=round(z_val, 2),
+                            isolation_score=round(iso_sc, 4),
+                            severity=severity,
+                        )
+                    )
+
+            if "chargeback_rate_pct" in row:
+                actual = float(row["chargeback_rate_pct"])
+                expected = float(row.get("expected_cb", 0.2))
+                z_val = float(row.get("z_cb", 0.0))
+
+                if actual >= 2.0 or (z_val >= self.z_score_threshold and actual >= 1.0) or (is_iso and actual >= 1.5):
+                    dev_pct = ((actual - expected) / expected) * 100.0 if expected > 0 else 200.0
+                    severity = "CRITICAL" if actual >= 5.0 else "HIGH"
+                    signals.append(
+                        AnomalySignal(
+                            metric_date=dt,
+                            region=region,
+                            product_name=product,
+                            customer_tier=tier,
+                            metric_name="chargeback_dispute_spike",
+                            actual_value=actual,
+                            expected_value=round(expected, 2),
+                            deviation_pct=round(dev_pct, 2),
+                            z_score=round(z_val, 2),
+                            isolation_score=round(iso_sc, 4),
+                            severity=severity,
+                        )
+                    )
+
+        return signals
+
     def scan_dataframe(
         self,
         df: pd.DataFrame,
@@ -70,18 +247,13 @@ class AnomalyDetectionEngine:
         signals: list[AnomalySignal] = []
         df_copy = df.copy()
 
-        # Ensure metric_date is datetime.date
         if not pd.api.types.is_datetime64_any_dtype(df_copy["metric_date"]):
             df_copy["parsed_date"] = pd.to_datetime(df_copy["metric_date"]).dt.date
         else:
             df_copy["parsed_date"] = df_copy["metric_date"].dt.date
 
-        # Standard slice dimensions
         slice_cols = [c for c in ["region", "product_name", "customer_tier"] if c in df_copy.columns]
-        if not slice_cols:
-            grouped = [("ALL", df_copy)]
-        else:
-            grouped = df_copy.groupby(slice_cols)
+        grouped = [("ALL", df_copy)] if not slice_cols else df_copy.groupby(slice_cols)
 
         for group_keys, slice_raw in grouped:
             if isinstance(group_keys, tuple):
@@ -93,167 +265,13 @@ class AnomalyDetectionEngine:
                 product = "All"
                 tier = "All"
 
-            slice_df = slice_raw.sort_values(by="parsed_date").drop_duplicates(subset=["parsed_date"]).copy()
-
-            # Record original dates before any gap filling
-            observed_dates = set(slice_df["parsed_date"])
-
-            # 1. Calendar Gap Filling
-            if fill_calendar_gaps and len(slice_df) >= 3:
-                min_d = slice_df["parsed_date"].min()
-                max_d = slice_df["parsed_date"].max()
-                full_range = pd.date_range(min_d, max_d, freq="D").date
-                slice_df = slice_df.set_index("parsed_date").reindex(full_range)
-                slice_df.index.name = "parsed_date"
-
-                # Forward fill dimension names & metric rates; zero fill amounts if missing
-                slice_df["region"] = slice_df["region"].ffill().bfill().fillna(region)
-                slice_df["product_name"] = slice_df["product_name"].ffill().bfill().fillna(product)
-                slice_df["customer_tier"] = slice_df["customer_tier"].ffill().bfill().fillna(tier)
-
-                for col in ["success_rate_pct", "avg_latency_ms", "chargeback_rate_pct", "avg_fraud_risk_score"]:
-                    if col in slice_df.columns:
-                        slice_df[col] = slice_df[col].ffill().bfill()
-
-                for col in ["daily_spend_amount", "transaction_count"]:
-                    if col in slice_df.columns:
-                        slice_df[col] = slice_df[col].fillna(0.0)
-
-                slice_df = slice_df.reset_index()
-
-            slice_len = len(slice_df)
-            if slice_len < 3:
+            slice_df, observed_dates = self._preprocess_slice(slice_raw, region, product, tier, fill_calendar_gaps)
+            if len(slice_df) < 3:
                 continue
 
-            # 2. Dynamic Rolling Statistics
-            min_p = min(3, slice_len)
-            win = min(self.rolling_window_days, slice_len)
-
-            # A. Success Rate Plunge Detection
-            if "success_rate_pct" in slice_df.columns:
-                r_mean = slice_df["success_rate_pct"].rolling(window=win, min_periods=min_p).mean()
-                r_std = slice_df["success_rate_pct"].rolling(window=win, min_periods=min_p).std().replace(0, 0.05).fillna(0.05)
-                slice_df["z_sr"] = ((slice_df["success_rate_pct"] - r_mean) / r_std).fillna(0)
-                slice_df["expected_sr"] = r_mean.fillna(slice_df["success_rate_pct"])
-
-            # B. Latency Surge Detection
-            if "avg_latency_ms" in slice_df.columns:
-                r_mean = slice_df["avg_latency_ms"].rolling(window=win, min_periods=min_p).mean()
-                r_std = slice_df["avg_latency_ms"].rolling(window=win, min_periods=min_p).std().replace(0, 5.0).fillna(5.0)
-                slice_df["z_lat"] = ((slice_df["avg_latency_ms"] - r_mean) / r_std).fillna(0)
-                slice_df["expected_lat"] = r_mean.fillna(slice_df["avg_latency_ms"])
-
-            # C. Chargeback / Dispute Spike Detection
-            if "chargeback_rate_pct" in slice_df.columns:
-                r_mean = slice_df["chargeback_rate_pct"].rolling(window=win, min_periods=min_p).mean()
-                r_std = slice_df["chargeback_rate_pct"].rolling(window=win, min_periods=min_p).std().replace(0, 0.05).fillna(0.05)
-                slice_df["z_cb"] = ((slice_df["chargeback_rate_pct"] - r_mean) / r_std).fillna(0)
-                slice_df["expected_cb"] = r_mean.fillna(slice_df["chargeback_rate_pct"])
-
-            # 3. Multi-Metric Isolation Forest Ensemble
-            feature_cols = [c for c in ["success_rate_pct", "avg_latency_ms", "chargeback_rate_pct", "daily_spend_amount"] if c in slice_df.columns]
-            slice_df["iso_score"] = 0.0
-            slice_df["is_iso_anom"] = False
-
-            if len(feature_cols) >= 2 and slice_len >= 7:
-                try:
-                    iso = IsolationForest(
-                        contamination=self.isolation_forest_contamination,
-                        random_state=42,
-                        n_estimators=50,
-                    )
-                    clean_features = slice_df[feature_cols].fillna(0.0)
-                    preds = iso.fit_predict(clean_features)
-                    scores = iso.decision_function(clean_features)
-                    slice_df["iso_score"] = scores
-                    slice_df["is_iso_anom"] = preds == -1
-                except Exception as e:
-                    logger.debug(f"[AnomalyEngine] IsolationForest skipped: {e}")
-
-            # 4. Extract Anomaly Signals on Observed Dates
-            for _, row in slice_df.iterrows():
-                dt = row["parsed_date"]
-                if dt not in observed_dates:
-                    continue
-
-                iso_sc = float(row.get("iso_score", 0.0))
-                is_iso = bool(row.get("is_iso_anom", False))
-
-                # Check Success Rate Plunge
-                if "success_rate_pct" in row:
-                    actual = float(row["success_rate_pct"])
-                    expected = float(row.get("expected_sr", 99.0))
-                    z_val = float(row.get("z_sr", 0.0))
-
-                    # Must have a meaningful drop (actual <= expected - 2.0 or actual <= 95.0) in addition to z-score
-                    if (z_val <= -self.z_score_threshold and (actual <= expected - 2.0 or actual <= 95.0)) or actual <= 85.0 or (is_iso and actual <= 92.0):
-                        dev_pct = ((actual - expected) / expected) * 100.0 if expected > 0 else -50.0
-                        severity = "CRITICAL" if actual <= 80.0 or z_val <= -3.5 else "HIGH"
-                        signals.append(
-                            AnomalySignal(
-                                metric_date=dt,
-                                region=region,
-                                product_name=product,
-                                customer_tier=tier,
-                                metric_name="success_rate_plunge",
-                                actual_value=actual,
-                                expected_value=round(expected, 2),
-                                deviation_pct=round(dev_pct, 2),
-                                z_score=round(z_val, 2),
-                                isolation_score=round(iso_sc, 4),
-                                severity=severity,
-                            )
-                        )
-
-                # Check Latency Surge
-                if "avg_latency_ms" in row:
-                    actual = float(row["avg_latency_ms"])
-                    expected = float(row.get("expected_lat", 200.0))
-                    z_val = float(row.get("z_lat", 0.0))
-
-                    if (z_val >= self.z_score_threshold and actual >= 500.0) or actual >= 1500.0 or (is_iso and actual >= 800.0):
-                        dev_pct = ((actual - expected) / expected) * 100.0 if expected > 0 else 100.0
-                        severity = "CRITICAL" if actual >= 2000.0 or z_val >= 4.0 else "HIGH"
-                        signals.append(
-                            AnomalySignal(
-                                metric_date=dt,
-                                region=region,
-                                product_name=product,
-                                customer_tier=tier,
-                                metric_name="avg_latency_surge",
-                                actual_value=actual,
-                                expected_value=round(expected, 2),
-                                deviation_pct=round(dev_pct, 2),
-                                z_score=round(z_val, 2),
-                                isolation_score=round(iso_sc, 4),
-                                severity=severity,
-                            )
-                        )
-
-                # Check Chargeback / Dispute Spike
-                if "chargeback_rate_pct" in row:
-                    actual = float(row["chargeback_rate_pct"])
-                    expected = float(row.get("expected_cb", 0.2))
-                    z_val = float(row.get("z_cb", 0.0))
-
-                    if actual >= 2.0 or (z_val >= self.z_score_threshold and actual >= 1.0) or (is_iso and actual >= 1.5):
-                        dev_pct = ((actual - expected) / expected) * 100.0 if expected > 0 else 200.0
-                        severity = "CRITICAL" if actual >= 5.0 else "HIGH"
-                        signals.append(
-                            AnomalySignal(
-                                metric_date=dt,
-                                region=region,
-                                product_name=product,
-                                customer_tier=tier,
-                                metric_name="chargeback_dispute_spike",
-                                actual_value=actual,
-                                expected_value=round(expected, 2),
-                                deviation_pct=round(dev_pct, 2),
-                                z_score=round(z_val, 2),
-                                isolation_score=round(iso_sc, 4),
-                                severity=severity,
-                            )
-                        )
+            slice_df = self._compute_rolling_baselines(slice_df)
+            slice_df = self._fit_isolation_forest(slice_df)
+            signals.extend(self._extract_slice_signals(slice_df, observed_dates, region, product, tier))
 
         return signals
 

@@ -139,8 +139,36 @@ class DynamicIngestionEngine:
         )
 
     @staticmethod
-    def _parse_dataframe(content: bytes, filename: str) -> pd.DataFrame:
-        """Parses CSV or JSON file buffer into pandas DataFrame."""
+    def _parse_dataframe(content: bytes | None, filename: str, file_path: str | Path | None = None) -> pd.DataFrame:
+        """Parses CSV, JSON, Parquet, or SQLite file buffer/path into pandas DataFrame."""
+        if file_path is not None:
+            path = Path(file_path)
+            if not path.exists():
+                raise FileNotFoundError(f"Dataset file not found at: {path}")
+            suffix = path.suffix.lower()
+            if suffix in [".sqlite", ".db", ".sqlite3"]:
+                import sqlite3
+                conn = sqlite3.connect(path)
+                cur = conn.cursor()
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;")
+                table_row = cur.fetchone()
+                if not table_row:
+                    conn.close()
+                    raise ValueError(f"No tables found in SQLite database at {path}")
+                table_name = table_row[0]
+                df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+                conn.close()
+                return df
+            elif suffix == ".csv" or suffix == ".txt":
+                return pd.read_csv(path, low_memory=False)
+            elif suffix == ".json":
+                return pd.read_json(path)
+            elif suffix == ".parquet":
+                return pd.read_parquet(path)
+
+        if content is None:
+            raise ValueError("Either content bytes or file_path must be provided to parse DataFrame.")
+
         lower_name = filename.lower()
         if lower_name.endswith(".csv") or lower_name.endswith(".txt"):
             return pd.read_csv(io.BytesIO(content))
@@ -149,7 +177,6 @@ class DynamicIngestionEngine:
         elif lower_name.endswith(".parquet"):
             return pd.read_parquet(io.BytesIO(content))
         else:
-            # Try CSV first, then JSON
             try:
                 return pd.read_csv(io.BytesIO(content))
             except Exception:
@@ -182,17 +209,38 @@ class DynamicIngestionEngine:
     @staticmethod
     async def ingest_dataset(
         db: AsyncSession,
-        content: bytes,
-        filename: str,
-        mapping: DatasetMapping,
+        content: bytes | None = None,
+        filename: str = "dataset.csv",
+        mapping: DatasetMapping | None = None,
+        file_path: str | Path | None = None,
+        max_records: int | None = None,
     ) -> IngestionSummary:
         """
         Ingests parsed dataset rows into telemetry_metrics and support_tickets.
         Runs FastEmbed ONNX embedding generation if narrative_col is present.
         """
-        df = DynamicIngestionEngine._parse_dataframe(content, filename)
+        df = DynamicIngestionEngine._parse_dataframe(content, filename, file_path=file_path)
+        if max_records and len(df) > max_records:
+            df = df.head(max_records)
+
         if len(df) == 0:
-            return IngestionSummary(dataset_name=mapping.dataset_name, total_records=0, metrics_inserted=0, tickets_embedded=0)
+            dataset_name = mapping.dataset_name if mapping else "empty_dataset"
+            return IngestionSummary(dataset_name=dataset_name, total_records=0, metrics_inserted=0, tickets_embedded=0)
+
+        # Auto-infer mapping if not provided
+        if mapping is None:
+            inferred = DynamicIngestionEngine.infer_schema(
+                content=content if content is not None else b"",
+                filename=filename or (Path(file_path).name if file_path else "dataset.csv"),
+            )
+            mapping = DatasetMapping(
+                dataset_name=inferred.dataset_name,
+                timestamp_col=inferred.timestamp_col,
+                primary_metric=inferred.primary_metric,
+                metric_cols=inferred.metric_cols,
+                dimension_cols=inferred.dimension_cols,
+                narrative_col=inferred.narrative_col,
+            )
 
         # Parse timestamps
         try:

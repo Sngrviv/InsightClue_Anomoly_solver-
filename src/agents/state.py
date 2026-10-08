@@ -69,3 +69,13 @@ class InvestigationState(TypedDict, total=False):
     confidence_score: float
     mitigation_steps: str
     is_complete: bool
+
+
+def sanitize_text_field(field_val: Any) -> str:
+    """Safely normalizes strings, lists, or None into formatted text."""
+    if field_val is None:
+        return ""
+    if isinstance(field_val, list):
+        return "\n".join(str(item) for item in field_val if item)
+    return str(field_val).strip()
+
